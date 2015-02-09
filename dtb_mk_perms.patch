@@ -1,0 +1,36 @@
+Index: sys/conf/kern.pre.mk
+===================================================================
+--- sys/conf/kern.pre.mk	(revision 278346)
++++ sys/conf/kern.pre.mk	(working copy)
+@@ -192,6 +192,9 @@ MKMODULESENV+=	ALL_MODULES=LINT
+ .if defined(MODULES_OVERRIDE)
+ MKMODULESENV+=	MODULES_OVERRIDE="${MODULES_OVERRIDE}"
+ .endif
++.if defined(MODULES_EXTRA)
++MKMODULESENV+=	MODULES_EXTRA="${MODULES_EXTRA}"
++.endif
+ .if defined(WITHOUT_MODULES)
+ MKMODULESENV+=	WITHOUT_MODULES="${WITHOUT_MODULES}"
+ .endif
+Index: sys/conf/dtb.mk
+===================================================================
+--- sys/conf/dtb.mk	(revision 278346)
++++ sys/conf/dtb.mk	(working copy)
+@@ -46,6 +46,9 @@ SYSDIR=	${_dir}
+ .PATH: ${SYSDIR}/gnu/dts/${MACHINE} ${SYSDIR}/boot/fdt/dts/${MACHINE}
+ 
+ DTBDIR?=/boot/dtb
++DTBOWN?=root
++DTBGRP?=wheel
++DTBMODE?=444
+ DTB=${DTS:R:S/$/.dtb/}
+ 
+ all: ${DTB}
+@@ -64,6 +67,7 @@ CLEANFILES+=${_dts:R:S/$/.dtb/}
+ realinstall: _dtbinstall
+ .ORDER: beforeinstall _kmodinstall
+ _dtbinstall:
++	mkdir -p ${DESTDIR}${DTBDIR}
+ .for _dtb in ${DTB}
+ 	${INSTALL} -o ${DTBOWN} -g ${DTBGRP} -m ${DTBMODE} \
+ 	    ${_INSTALLFLAGS} ${_dtb} ${DESTDIR}${DTBDIR}

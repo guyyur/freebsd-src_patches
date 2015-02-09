@@ -1,0 +1,259 @@
+Index: share/man/man4/ip6.4
+===================================================================
+--- share/man/man4/ip6.4	(revision 277773)
++++ share/man/man4/ip6.4	(working copy)
+@@ -1,5 +1,5 @@
+ .\"	$KAME: ip6.4,v 1.23 2005/01/11 05:56:25 itojun Exp $
+-.\"	$OpenBSD: ip6.4,v 1.21 2005/01/06 03:50:46 itojun Exp $
++.\"	$OpenBSD: ip6.4,v 1.33 2014/06/11 16:59:47 chrisz Exp $
+ .\"
+ .\" Copyright (c) 1983, 1991, 1993
+ .\"	The Regents of the University of California.  All rights reserved.
+@@ -37,6 +37,7 @@
+ .Nm ip6
+ .Nd Internet Protocol version 6 (IPv6) network layer
+ .Sh SYNOPSIS
++.In sys/types.h
+ .In sys/socket.h
+ .In netinet/in.h
+ .Ft int
+@@ -143,21 +144,9 @@ extension headers.
+ .Pp
+ The following socket options are supported:
+ .Bl -tag -width Ds
+-.\" .It Dv IPV6_OPTIONS
+ .It Dv IPV6_UNICAST_HOPS Fa "int *"
+ Get or set the default hop limit header field for outgoing unicast
+ datagrams sent on this socket.
+-.\" .It Dv IPV6_RECVOPTS Fa "int *"
+-.\" Get or set the status of whether all header options will be
+-.\" delivered along with the datagram when it is received.
+-.\" .It Dv IPV6_RECVRETOPTS Fa "int *"
+-.\" Get or set the status of whether header options will be delivered
+-.\" for reply.
+-.\" .It Dv IPV6_RECVDSTADDR Fa "int *"
+-.\" Get or set the status of whether datagrams are received with
+-.\" destination addresses.
+-.\" .It Dv IPV6_RETOPTS
+-.\" Get or set IPv6 options.
+ .It Dv IPV6_MULTICAST_IF Fa "u_int *"
+ Get or set the interface from which multicast packets will be sent.
+ For hosts with multiple interfaces, each multicast transmission is sent
+@@ -240,7 +229,7 @@ Use a high range (varies, see
+ Use a low, reserved range (600\-1023, see
+ .Xr ip 4 ) .
+ .El
+-.It Dv IPV6_PKTINFO Fa "int *"
++.It Dv IPV6_RECVPKTINFO Fa "int *"
+ Get or set whether additional information about subsequent packets will
+ be provided as ancillary data along with the payload in subsequent
+ .Xr recvmsg 2
+@@ -253,7 +242,10 @@ struct in6_pktinfo {
+ 	unsigned int    ipi6_ifindex; /* send/recv if index */
+ };
+ .Ed
+-.It Dv IPV6_HOPLIMIT Fa "int *"
++.Pp
++Turning this option on will result in this socket getting cmsg data of
++type IPV6_PKTINFO.
++.It Dv IPV6_RECVHOPLIMIT Fa "int *"
+ Get or set whether the hop limit header field from subsequent packets
+ will be provided as ancillary data along with the payload in subsequent
+ .Xr recvmsg 2
+@@ -261,18 +253,20 @@ calls.
+ The value is stored as an
+ .Vt int
+ in the ancillary data returned.
+-.\" .It Dv IPV6_NEXTHOP Fa "int *"
+-.\" Get or set whether the address of the next hop for subsequent
+-.\" packets will be provided as ancillary data along with the payload in
+-.\" subsequent
+-.\" .Xr recvmsg 2
+-.\" calls.
+-.\" The option is stored as a
+-.\" .Vt sockaddr
+-.\" structure in the ancillary data returned.
+-.\" .Pp
+-.\" This option requires superuser privileges.
+-.It Dv IPV6_HOPOPTS Fa "int *"
++Turning this option on will result in this socket getting cmsg data of
++type IPV6_HOPLIMIT.
++.It Dv IPV6_NEXTHOP Fa "int *"
++Get or set whether the address of the next hop for subsequent
++packets will be provided as ancillary data along with the payload in
++subsequent
++.Xr recvmsg 2
++calls.
++The option is stored as a
++.Vt sockaddr
++structure in the ancillary data returned.
++.Pp
++This option requires superuser privileges.
++.It Dv IPV6_RECVHOPOPTS Fa "int *"
+ Get or set whether the hop-by-hop options from subsequent packets will be
+ provided as ancillary data along with the payload in subsequent
+ .Xr recvmsg 2
+@@ -288,11 +282,13 @@ struct ip6_hbh {
+ .Ed
+ .Pp
+ The
+-.Fn inet6_option_space
++.Fn inet6_opt_init
+ routine and family of routines may be used to manipulate this data.
+ .Pp
+ This option requires superuser privileges.
+-.It Dv IPV6_DSTOPTS Fa "int *"
++Turning this option on will result in this socket getting cmsg data of
++type IPV6_HOPOPTS.
++.It Dv IPV6_RECVDSTOPTS Fa "int *"
+ Get or set whether the destination options from subsequent packets will
+ be provided as ancillary data along with the payload in subsequent
+ .Xr recvmsg 2
+@@ -308,10 +304,12 @@ struct ip6_dest {
+ .Ed
+ .Pp
+ The
+-.Fn inet6_option_space
++.Fn inet6_opt_init
+ routine and family of routines may be used to manipulate this data.
+ .Pp
+ This option requires superuser privileges.
++Turning this option on will result in this socket getting cmsg data of
++type IPV6_DSTOPTS.
+ .It Dv IPV6_TCLASS Fa "int *"
+ Get or set the value of the traffic class field used for outgoing datagrams
+ on this socket.
+@@ -324,7 +322,7 @@ provided as ancillary data along with the payload
+ calls.
+ The header field is stored as a single value of type
+ .Vt int .
+-.It Dv IPV6_RTHDR Fa "int *"
++.It Dv IPV6_RECVRTHDR Fa "int *"
+ Get or set whether the routing header from subsequent packets will be
+ provided as ancillary data along with the payload in subsequent
+ .Xr recvmsg 2
+@@ -342,10 +340,12 @@ struct ip6_rthdr {
+ .Ed
+ .Pp
+ The
+-.Fn inet6_option_space
++.Fn inet6_rth_space
+ routine and family of routines may be used to manipulate this data.
+ .Pp
+ This option requires superuser privileges.
++Turning this option on will result in this socket getting cmsg data of
++type IPV6_RTHDR.
+ .It Dv IPV6_PKTOPTIONS Fa "struct cmsghdr *"
+ Get or set all header options and extension headers at one time on the
+ last packet sent or received on the socket.
+@@ -412,11 +412,10 @@ level.
+ .El
+ .Pp
+ The
+-.Dv IPV6_PKTINFO ,
+-.\" .Dv IPV6_NEXTHOP ,
+-.Dv IPV6_HOPLIMIT ,
+-.Dv IPV6_HOPOPTS ,
+-.Dv IPV6_DSTOPTS ,
++.Dv IPV6_RECVPKTINFO ,
++.Dv IPV6_RECVHOPLIMIT ,
++.Dv IPV6_RECVHOPOPTS ,
++.Dv IPV6_RECVDSTOPTS ,
+ and
+ .Dv IPV6_RTHDR
+ options will return ancillary data along with payload contents in subsequent
+@@ -428,7 +427,7 @@ set to
+ and
+ .Va cmsg_type
+ set to respective option name value (e.g.,
+-.Dv IPV6_HOPTLIMIT ) .
++.Dv IPV6_HOPLIMIT ) .
+ These options may also be used directly as ancillary
+ .Va cmsg_type
+ values in
+@@ -454,7 +453,7 @@ A good example is the outgoing interface for multi
+ can be set by the
+ .Dv IPV6_MULTICAST_IF
+ socket option, through the
+-.Dv IPV6_PKTINFO
++.Dv IPV6_RECVPKTINFO
+ option, and through the
+ .Va sin6_scope_id
+ field of the socket address passed to the
+@@ -590,7 +589,7 @@ m.msg_controllen = sizeof(buf);
+  * returned along with the payload.
+  */
+ optval = 1;
+-if (setsockopt(s, IPPROTO_IPV6, IPV6_HOPLIMIT, &optval,
++if (setsockopt(s, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &optval,
+     sizeof(optval)) == -1)
+ 	err(1, "setsockopt");
+ 
+@@ -648,8 +647,8 @@ An ancillary data object was improperly formed.
+ .Xr send 2 ,
+ .Xr setsockopt 2 ,
+ .Xr socket 2 ,
+-.\" .Xr inet6_option_space 3 ,
+-.\" .Xr inet6_rthdr_space 3 ,
++.\" .Xr inet6_opt_init 3 ,
++.\" .Xr inet6_rth_space 3 ,
+ .Xr if_nametoindex 3 ,
+ .Xr bpf 4 ,
+ .Xr icmp6 4 ,
+@@ -658,41 +657,37 @@ An ancillary data object was improperly formed.
+ .Xr netintro 4 ,
+ .Xr tcp 4 ,
+ .Xr udp 4
++.Sh STANDARDS
+ .Rs
+-.%A W. Stevens
+-.%A M. Thomas
+-.%T Advanced Sockets API for IPv6
+-.%R RFC 2292
+-.%D February 1998
+-.Re
+-.Rs
+ .%A S. Deering
+ .%A R. Hinden
++.%D December 1998
++.%R RFC 2460
+ .%T Internet Protocol, Version 6 (IPv6) Specification
+-.%R RFC 2460
+-.%D December 1998
+ .Re
++.Pp
+ .Rs
+ .%A R. Gilligan
+ .%A S. Thomson
+ .%A J. Bound
++.%A J. McCann
+ .%A W. Stevens
++.%D February 2003
++.%R RFC 3493
+ .%T Basic Socket Interface Extensions for IPv6
+-.%R RFC 2553
+-.%D March 1999
+ .Re
++.Pp
+ .Rs
+ .%A W. Stevens
+-.%A B. Fenner
+-.%A A. Rudoff
+-.%T UNIX Network Programming, third edition
++.%A M. Thomas
++.%A E. Nordmark
++.%A T. Jinmei
++.%D May 2003
++.%R RFC 3542
++.%T Advanced Sockets Application Program Interface (API) for IPv6
+ .Re
+-.Sh STANDARDS
+-Most of the socket options are defined in RFC 2292 or RFC 2553.
++.Pp
+ The
+-.Dv IPV6_V6ONLY
+-socket option is defined in RFC 3493 Section 5.3.
+-The
+ .Dv IPV6_PORTRANGE
+ socket option and the conflict resolution rule are not defined in the
+ RFCs and should be considered implementation dependent.

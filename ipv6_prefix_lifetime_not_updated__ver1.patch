@@ -1,0 +1,116 @@
+Index: sys/netinet6/in6.c
+===================================================================
+--- sys/netinet6/in6.c	(revision 277773)
++++ sys/netinet6/in6.c	(working copy)
+@@ -657,25 +657,11 @@ in6_control(struct socket *so, u_long cmd, caddr_t
+ 		pr0.ndpr_vltime = ifra->ifra_lifetime.ia6t_vltime;
+ 		pr0.ndpr_pltime = ifra->ifra_lifetime.ia6t_pltime;
+ 
+-		/* add the prefix if not yet. */
+-		if ((pr = nd6_prefix_lookup(&pr0)) == NULL) {
+-			/*
+-			 * nd6_prelist_add will install the corresponding
+-			 * interface route.
+-			 */
+-			if ((error = nd6_prelist_add(&pr0, NULL, &pr)) != 0) {
+-				if (carp_attached)
+-					(*carp_detach_p)(&ia->ia_ifa);
+-				goto out;
+-			}
+-			if (pr == NULL) {
+-				if (carp_attached)
+-					(*carp_detach_p)(&ia->ia_ifa);
+-				log(LOG_ERR, "nd6_prelist_add succeeded but "
+-				    "no prefix\n");
+-				error = EINVAL;
+-				goto out;
+-			}
++		/* add or update the prefix. */
++		if ((error = in6_prelist_update(&pr0, &pr)) != 0) {
++			if (carp_attached)
++				(*carp_detach_p)(&ia->ia_ifa);
++			goto out;
+ 		}
+ 
+ 		/* relate the address to the prefix */
+Index: sys/netinet6/nd6.h
+===================================================================
+--- sys/netinet6/nd6.h	(revision 277773)
++++ sys/netinet6/nd6.h	(working copy)
+@@ -441,6 +441,7 @@ void defrtrlist_del(struct nd_defrouter *);
+ void prelist_remove(struct nd_prefix *);
+ int nd6_prelist_add(struct nd_prefixctl *, struct nd_defrouter *,
+ 	struct nd_prefix **);
++int in6_prelist_update(struct nd_prefixctl *, struct nd_prefix **);
+ void pfxlist_onlink_check(void);
+ struct nd_defrouter *defrouter_lookup(struct in6_addr *, struct ifnet *);
+ struct nd_prefix *nd6_prefix_lookup(struct nd_prefixctl *);
+Index: sys/netinet6/nd6_rtr.c
+===================================================================
+--- sys/netinet6/nd6_rtr.c	(revision 277773)
++++ sys/netinet6/nd6_rtr.c	(working copy)
+@@ -906,6 +906,64 @@ nd6_prelist_add(struct nd_prefixctl *pr, struct nd
+ 	return 0;
+ }
+ 
++int
++in6_prelist_update(struct nd_prefixctl *new, struct nd_prefix **newp)
++{
++	struct nd_prefix *pr;
++	char ip6buf[INET6_ADDRSTRLEN];
++
++	/* add the prefix if not yet. */
++	if ((pr = nd6_prefix_lookup(new)) == NULL) {
++		/*
++		 * nd6_prelist_add will install the corresponding
++		 * interface route.
++		 */
++		return nd6_prelist_add(new, NULL, newp);
++	}
++	else {
++		/*
++		 * nd6_prefix_lookup() ensures that pr and new have the same
++		 * prefix on a same interface.
++		 */
++
++		/*
++		 * Update prefix information.  Note that the on-link (L) bit
++		 * and the autonomous (A) bit should NOT be changed from 1
++		 * to 0.
++		 */
++		if (new->ndpr_raf_onlink == 1)
++			pr->ndpr_raf_onlink = 1;
++		if (new->ndpr_raf_auto == 1)
++			pr->ndpr_raf_auto = 1;
++		if (new->ndpr_raf_onlink) {
++			pr->ndpr_vltime = new->ndpr_vltime;
++			pr->ndpr_pltime = new->ndpr_pltime;
++			(void)in6_init_prefix_ltimes(pr); /* XXX error case? */
++			pr->ndpr_lastupdate = time_uptime;
++		}
++
++		if (new->ndpr_raf_onlink &&
++		    (pr->ndpr_stateflags & NDPRF_ONLINK) == 0) {
++			int e;
++
++			if ((e = nd6_prefix_onlink(pr)) != 0) {
++				nd6log((LOG_ERR,
++				    "in6_prelist_update: failed to make "
++				    "the prefix %s/%d on-link on %s "
++				    "(errno=%d)\n",
++				    ip6_sprintf(ip6buf,
++					    &pr->ndpr_prefix.sin6_addr),
++				    pr->ndpr_plen, if_name(pr->ndpr_ifp), e));
++				/* proceed anyway. XXX: is it correct? */
++			}
++		}
++
++		*newp = pr;
++	}
++
++	return 0;
++}
++
+ void
+ prelist_remove(struct nd_prefix *pr)
+ {

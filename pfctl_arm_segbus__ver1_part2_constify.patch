@@ -1,0 +1,102 @@
+Index: sbin/pfctl/pf_print_state.c
+===================================================================
+--- sbin/pfctl/pf_print_state.c  (revision 277773M)
++++ sbin/pfctl/pf_print_state.c  (working copy)
+@@ -50,10 +50,10 @@
+ #include "pfctl_parser.h"
+ #include "pfctl.h"
+ 
+-void	print_name(struct pf_addr *, sa_family_t);
++void	print_name(const struct pf_addr *, sa_family_t);
+ 
+ void
+-print_addr(struct pf_addr_wrap *addr, sa_family_t af, int verbose)
++print_addr(const struct pf_addr_wrap *addr, sa_family_t af, int verbose)
+ {
+ 	switch (addr->type) {
+ 	case PF_ADDR_DYNIFTL:
+@@ -134,7 +134,7 @@ print_addr(struct pf_addr_wrap *addr, sa
+ }
+ 
+ void
+-print_name(struct pf_addr *addr, sa_family_t af)
++print_name(const struct pf_addr *addr, sa_family_t af)
+ {
+ 	char host[NI_MAXHOST];
+ 
+@@ -167,7 +167,7 @@ print_name(struct pf_addr *addr, sa_fami
+ }
+ 
+ void
+-print_host(struct pf_addr *addr, u_int16_t port, sa_family_t af, int opts)
++print_host(const struct pf_addr *addr, u_int16_t port, sa_family_t af, int opts)
+ {
+ 	if (opts & PF_OPT_USEDNS)
+ 		print_name(addr, af);
+@@ -194,7 +194,7 @@ print_host(struct pf_addr *addr, u_int16
+ }
+ 
+ void
+-print_seq(struct pfsync_state_peer *p)
++print_seq(const struct pfsync_state_peer *p)
+ {
+ 	if (p->seqdiff)
+ 		printf("[%u + %u](+%u)", ntohl(p->seqlo),
+@@ -205,11 +205,11 @@ print_seq(struct pfsync_state_peer *p)
+ }
+ 
+ void
+-print_state(struct pfsync_state *s, int opts)
++print_state(const struct pfsync_state *s, int opts)
+ {
+-	struct pfsync_state_peer *src, *dst;
++	const struct pfsync_state_peer *src, *dst;
+ 	struct pfsync_state_key sk, nk;
+-	struct protoent *p;
++	const struct protoent *p;
+ 	int min, sec;
+ 
+ 	if (s->direction == PF_OUT) {
+@@ -349,7 +349,7 @@ print_state(struct pfsync_state *s, int
+ }
+ 
+ int
+-unmask(struct pf_addr *m, sa_family_t af)
++unmask(const struct pf_addr *m, sa_family_t af)
+ {
+ 	int i = 31, j = 0, b = 0;
+ 	u_int32_t tmp;
+Index: sbin/pfctl/pfctl.h
+===================================================================
+--- sbin/pfctl/pfctl.h	(revision 277773)
++++ sbin/pfctl/pfctl.h	(working copy)
+@@ -115,11 +115,11 @@ void		 pfaltq_store(struct pf_altq *);
+ struct pf_altq	*pfaltq_lookup(const char *);
+ char		*rate2str(double);
+ 
+-void	 print_addr(struct pf_addr_wrap *, sa_family_t, int);
+-void	 print_host(struct pf_addr *, u_int16_t p, sa_family_t, int);
+-void	 print_seq(struct pfsync_state_peer *);
+-void	 print_state(struct pfsync_state *, int);
+-int	 unmask(struct pf_addr *, sa_family_t);
++void	 print_addr(const struct pf_addr_wrap *, sa_family_t, int);
++void	 print_host(const struct pf_addr *, u_int16_t p, sa_family_t, int);
++void	 print_seq(const struct pfsync_state_peer *);
++void	 print_state(const struct pfsync_state *, int);
++int	 unmask(const struct pf_addr *, sa_family_t);
+ 
+ int	 pfctl_cmdline_symset(char *);
+ int	 pfctl_add_trans(struct pfr_buffer *, int, const char *);
+Index: sbin/pfctl/pfctl_parser.h
+===================================================================
+--- sbin/pfctl/pfctl_parser.h	(revision 277773)
++++ sbin/pfctl/pfctl_parser.h	(working copy)
+@@ -292,7 +292,7 @@ extern const struct pf_timeout pf_timeouts[];
+ 
+ void			 set_ipmask(struct node_host *, u_int8_t);
+ int			 check_netmask(struct node_host *, sa_family_t);
+-int			 unmask(struct pf_addr *, sa_family_t);
++int			 unmask(const struct pf_addr *, sa_family_t);
+ void			 ifa_load(void);
+ int			 get_socket_domain(void);
+ struct node_host	*ifa_exists(const char *);

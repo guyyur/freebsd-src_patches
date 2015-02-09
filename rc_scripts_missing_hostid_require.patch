@@ -1,0 +1,26 @@
+Index: etc/rc.d/hostid_save
+===================================================================
+--- etc/rc.d/hostid_save	(revision 277773)
++++ etc/rc.d/hostid_save	(working copy)
+@@ -4,7 +4,7 @@
+ #
+ 
+ # PROVIDE: hostid_save
+-# REQUIRE: root
++# REQUIRE: hostid root
+ # KEYWORD: nojail
+ 
+ . /etc/rc.subr
+Index: etc/rc.d/netif
+===================================================================
+--- etc/rc.d/netif	(revision 277773)
++++ etc/rc.d/netif	(working copy)
+@@ -26,7 +26,7 @@
+ #
+ 
+ # PROVIDE: netif
+-# REQUIRE: atm1 FILESYSTEMS serial sppp sysctl
++# REQUIRE: atm1 FILESYSTEMS hostid serial sppp sysctl
+ # REQUIRE: ipfilter ipfs
+ # KEYWORD: nojailvnet
+ 

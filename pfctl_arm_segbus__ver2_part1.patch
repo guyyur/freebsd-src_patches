@@ -1,0 +1,808 @@
+Index: sys/net/pfvar.h
+===================================================================
+--- sys/net/pfvar.h	(revision 277773)
++++ sys/net/pfvar.h	(working copy)
+@@ -748,8 +748,8 @@ struct pf_state {
+ };
+ 
+ /*
+- * Unified state structures for pulling states out of the kernel
+- * used by pfsync(4) and the pf(4) ioctl.
++ * State structures for pulling states out of the kernel
++ * used by pfsync(4).
+  */
+ struct pfsync_state_scrub {
+ 	u_int16_t	pfss_flags;
+@@ -804,7 +804,6 @@ struct pfsync_state {
+ 
+ #ifdef _KERNEL
+ /* pfsync */
+-typedef int		pfsync_state_import_t(struct pfsync_state *, u_int8_t);
+ typedef	void		pfsync_insert_state_t(struct pf_state *);
+ typedef	void		pfsync_update_state_t(struct pf_state *);
+ typedef	void		pfsync_delete_state_t(struct pf_state *);
+@@ -811,7 +810,6 @@ typedef	void		pfsync_delete_state_t(struct pf_stat
+ typedef void		pfsync_clear_states_t(u_int32_t, const char *);
+ typedef int		pfsync_defer_t(struct pf_state *, struct mbuf *);
+ 
+-extern pfsync_state_import_t	*pfsync_state_import_ptr;
+ extern pfsync_insert_state_t	*pfsync_insert_state_ptr;
+ extern pfsync_update_state_t	*pfsync_update_state_ptr;
+ extern pfsync_delete_state_t	*pfsync_delete_state_ptr;
+@@ -818,8 +816,6 @@ extern pfsync_delete_state_t	*pfsync_delete_state_
+ extern pfsync_clear_states_t	*pfsync_clear_states_ptr;
+ extern pfsync_defer_t		*pfsync_defer_ptr;
+ 
+-void			pfsync_state_export(struct pfsync_state *,
+-			    struct pf_state *);
+ 
+ /* pflog */
+ struct pf_ruleset;
+@@ -836,7 +832,6 @@ extern pflog_packet_t		*pflog_packet_ptr;
+ #define	PFSYNC_FLAG_NATSRCNODE	0x08
+ 
+ /* for copies to/from network byte order */
+-/* ioctl interface also uses network byte order */
+ #define pf_state_peer_hton(s,d) do {		\
+ 	(d)->seqlo = htonl((s)->seqlo);		\
+ 	(d)->seqhi = htonl((s)->seqhi);		\
+@@ -1231,8 +1226,53 @@ struct pfioc_natlook {
+ 	u_int8_t	 direction;
+ };
+ 
++struct pfioc_state_scrub {
++	u_int16_t	pfss_flags;
++	u_int8_t	pfss_ttl;	/* stashed TTL		*/
++#define PFIOC_SCRUB_FLAG_VALID		0x01
++	u_int8_t	scrub_flag;
++	u_int32_t	pfss_ts_mod;	/* timestamp modulation	*/
++};
++
++struct pfioc_state_peer {
++	struct pfioc_state_scrub scrub;	/* state is scrubbed	*/
++	u_int32_t	seqlo;		/* Max sequence number sent	*/
++	u_int32_t	seqhi;		/* Max the other end ACKd + win	*/
++	u_int32_t	seqdiff;	/* Sequence number modulator	*/
++	u_int16_t	max_win;	/* largest window (pre scaling)	*/
++	u_int16_t	mss;		/* Maximum segment size option	*/
++	u_int8_t	state;		/* active state level		*/
++	u_int8_t	wscale;		/* window scaling factor	*/
++};
++
++struct pfioc_state_key {
++	struct pf_addr	 addr[2];
++	u_int16_t	 port[2];
++};
++
+ struct pfioc_state {
+-	struct pfsync_state	state;
++	u_int64_t	 id;
++	char		 ifname[IFNAMSIZ];
++	struct pfioc_state_key	key[2];
++	struct pfioc_state_peer src;
++	struct pfioc_state_peer dst;
++	struct pf_addr	 rt_addr;
++	u_int32_t	 rule;
++	u_int32_t	 anchor;
++	u_int32_t	 nat_rule;
++	u_int32_t	 creation;
++	u_int32_t	 expire;
++	u_int32_t	 creatorid;
++	u_int64_t	 packets[2];
++	u_int64_t	 bytes[2];
++	sa_family_t	 af;
++	u_int8_t	 proto;
++	u_int8_t	 direction;
++	u_int8_t	 log;
++	u_int8_t	 state_flags;
++	u_int8_t	 timeout;
++	u_int8_t	 sync_flags;
++	u_int8_t	 updates;
+ };
+ 
+ struct pfioc_src_node_kill {
+@@ -1257,7 +1297,7 @@ struct pfioc_states {
+ 	int	ps_len;
+ 	union {
+ 		caddr_t			 psu_buf;
+-		struct pfsync_state	*psu_states;
++		struct pfioc_state	*psu_states;
+ 	} ps_u;
+ #define ps_buf		ps_u.psu_buf
+ #define ps_states	ps_u.psu_states
+@@ -1360,7 +1400,42 @@ struct pfioc_iface {
+ 	int	 pfiio_flags;
+ };
+ 
++/* ioctl interface uses host byte order */
++#define pf_state_peer_to_pfioc(s,d) do {		\
++	(d)->seqlo = (s)->seqlo;			\
++	(d)->seqhi = (s)->seqhi;			\
++	(d)->seqdiff = (s)->seqdiff;			\
++	(d)->max_win = (s)->max_win;			\
++	(d)->mss = (s)->mss;				\
++	(d)->state = (s)->state;			\
++	(d)->wscale = (s)->wscale;			\
++	if ((s)->scrub) {						\
++		(d)->scrub.pfss_flags = 				\
++		    (s)->scrub->pfss_flags & PFSS_TIMESTAMP;		\
++		(d)->scrub.pfss_ttl = (s)->scrub->pfss_ttl;		\
++		(d)->scrub.pfss_ts_mod = (s)->scrub->pfss_ts_mod;	\
++		(d)->scrub.scrub_flag = PFIOC_SCRUB_FLAG_VALID;	\
++	}								\
++} while (0)
+ 
++#define pf_state_peer_from_pfioc(s,d) do {		\
++	(d)->seqlo = (s)->seqlo;			\
++	(d)->seqhi = (s)->seqhi;			\
++	(d)->seqdiff = (s)->seqdiff;			\
++	(d)->max_win = (s)->max_win;			\
++	(d)->mss = (s)->mss;				\
++	(d)->state = (s)->state;			\
++	(d)->wscale = (s)->wscale;			\
++	if ((s)->scrub.scrub_flag == PFIOC_SCRUB_FLAG_VALID && 	\
++	    (d)->scrub != NULL) {					\
++		(d)->scrub->pfss_flags =				\
++		    (s)->scrub.pfss_flags & PFSS_TIMESTAMP;		\
++		(d)->scrub->pfss_ttl = (s)->scrub.pfss_ttl;		\
++		(d)->scrub->pfss_ts_mod = (s)->scrub.pfss_ts_mod;	\
++	}								\
++} while (0)
++
++
+ /*
+  * ioctl operations
+  */
+Index: sys/net/if_pfsync.h
+===================================================================
+--- sys/net/if_pfsync.h	(revision 277773)
++++ sys/net/if_pfsync.h	(working copy)
+@@ -256,7 +256,6 @@ struct pfsyncreq {
+ #define	PFSYNC_S_DEFER	0xfe
+ #define	PFSYNC_S_NONE	0xff
+ 
+-#define	PFSYNC_SI_IOCTL		0x01
+ #define	PFSYNC_SI_CKSUM		0x02
+ #define	PFSYNC_SI_ACK		0x04
+ 
+Index: sys/netpfil/pf/pf_ioctl.c
+===================================================================
+--- sys/netpfil/pf/pf_ioctl.c	(revision 277773)
++++ sys/netpfil/pf/pf_ioctl.c	(working copy)
+@@ -158,6 +158,11 @@ static int		 pf_clear_tables(void);
+ static void		 pf_clear_srcnodes(struct pf_src_node *);
+ static void		 pf_kill_srcnodes(struct pfioc_src_node_kill *);
+ static void		 pf_tbladdr_copyout(struct pf_addr_wrap *);
++static int		 pfioc_alloc_scrub_memory(struct pfioc_state_peer *,
++			    struct pf_state_peer *);
++static void		 pfioc_state_export(struct pfioc_state *sp,
++			    struct pf_state *st);
++static int		 pfioc_state_import(struct pfioc_state *sp);
+ 
+ /*
+  * Wrapper functions for pfil(9) hooks
+@@ -195,7 +200,6 @@ struct rwlock			pf_rules_lock;
+ struct sx			pf_ioctl_lock;
+ 
+ /* pfsync */
+-pfsync_state_import_t 		*pfsync_state_import_ptr = NULL;
+ pfsync_insert_state_t		*pfsync_insert_state_ptr = NULL;
+ pfsync_update_state_t		*pfsync_update_state_ptr = NULL;
+ pfsync_delete_state_t		*pfsync_delete_state_ptr = NULL;
+@@ -1713,18 +1717,14 @@ relock_DIOCKILLSTATES:
+ 
+ 	case DIOCADDSTATE: {
+ 		struct pfioc_state	*ps = (struct pfioc_state *)addr;
+-		struct pfsync_state	*sp = &ps->state;
+ 
+-		if (sp->timeout >= PFTM_MAX) {
++		if (ps->timeout >= PFTM_MAX) {
+ 			error = EINVAL;
+ 			break;
+ 		}
+-		if (pfsync_state_import_ptr != NULL) {
+-			PF_RULES_RLOCK();
+-			error = pfsync_state_import_ptr(sp, PFSYNC_SI_IOCTL);
+-			PF_RULES_RUNLOCK();
+-		} else
+-			error = EOPNOTSUPP;
++		PF_RULES_RLOCK();
++		error = pfioc_state_import(ps);
++		PF_RULES_RUNLOCK();
+ 		break;
+ 	}
+ 
+@@ -1732,13 +1732,13 @@ relock_DIOCKILLSTATES:
+ 		struct pfioc_state	*ps = (struct pfioc_state *)addr;
+ 		struct pf_state		*s;
+ 
+-		s = pf_find_state_byid(ps->state.id, ps->state.creatorid);
++		s = pf_find_state_byid(ps->id, ps->creatorid);
+ 		if (s == NULL) {
+ 			error = ENOENT;
+ 			break;
+ 		}
+ 
+-		pfsync_state_export(&ps->state, s);
++		pfioc_state_export(ps, s);
+ 		PF_STATE_UNLOCK(s);
+ 		break;
+ 	}
+@@ -1746,12 +1746,12 @@ relock_DIOCKILLSTATES:
+ 	case DIOCGETSTATES: {
+ 		struct pfioc_states	*ps = (struct pfioc_states *)addr;
+ 		struct pf_state		*s;
+-		struct pfsync_state	*pstore, *p;
++		struct pfioc_state	*pstore, *p;
+ 		int i, nr;
+ 
+ 		if (ps->ps_len == 0) {
+ 			nr = uma_zone_get_cur(V_pf_state_z);
+-			ps->ps_len = sizeof(struct pfsync_state) * nr;
++			ps->ps_len = sizeof(struct pfioc_state) * nr;
+ 			break;
+ 		}
+ 
+@@ -1771,7 +1771,7 @@ relock_DIOCKILLSTATES:
+ 					PF_HASHROW_UNLOCK(ih);
+ 					goto DIOCGETSTATES_full;
+ 				}
+-				pfsync_state_export(p, s);
++				pfioc_state_export(p, s);
+ 				p++;
+ 				nr++;
+ 			}
+@@ -1779,12 +1779,12 @@ relock_DIOCKILLSTATES:
+ 		}
+ DIOCGETSTATES_full:
+ 		error = copyout(pstore, ps->ps_states,
+-		    sizeof(struct pfsync_state) * nr);
++		    sizeof(struct pfioc_state) * nr);
+ 		if (error) {
+ 			free(pstore, M_TEMP);
+ 			break;
+ 		}
+-		ps->ps_len = sizeof(struct pfsync_state) * nr;
++		ps->ps_len = sizeof(struct pfioc_state) * nr;
+ 		free(pstore, M_TEMP);
+ 
+ 		break;
+@@ -3264,11 +3264,24 @@ fail:
+ 	return (error);
+ }
+ 
+-void
+-pfsync_state_export(struct pfsync_state *sp, struct pf_state *st)
++static int
++pfioc_alloc_scrub_memory(struct pfioc_state_peer *s,
++    struct pf_state_peer *d)
+ {
+-	bzero(sp, sizeof(struct pfsync_state));
++	if (s->scrub.scrub_flag && d->scrub == NULL) {
++		d->scrub = uma_zalloc(V_pf_state_scrub_z, M_NOWAIT | M_ZERO);
++		if (d->scrub == NULL)
++			return (ENOMEM);
++	}
+ 
++	return (0);
++}
++
++static void
++pfioc_state_export(struct pfioc_state *sp, struct pf_state *st)
++{
++	bzero(sp, sizeof(struct pfioc_state));
++
+ 	/* copy from state key */
+ 	sp->key[PF_SK_WIRE].addr[0] = st->key[PF_SK_WIRE]->addr[0];
+ 	sp->key[PF_SK_WIRE].addr[1] = st->key[PF_SK_WIRE]->addr[1];
+@@ -3287,9 +3300,9 @@ fail:
+ 	sp->creation = htonl(time_uptime - st->creation);
+ 	sp->expire = pf_state_expires(st);
+ 	if (sp->expire <= time_uptime)
+-		sp->expire = htonl(0);
++		sp->expire = 0;
+ 	else
+-		sp->expire = htonl(sp->expire - time_uptime);
++		sp->expire = sp->expire - time_uptime;
+ 
+ 	sp->direction = st->direction;
+ 	sp->log = st->log;
+@@ -3302,27 +3315,171 @@ fail:
+ 
+ 	sp->id = st->id;
+ 	sp->creatorid = st->creatorid;
+-	pf_state_peer_hton(&st->src, &sp->src);
+-	pf_state_peer_hton(&st->dst, &sp->dst);
++	pf_state_peer_to_pfioc(&st->src, &sp->src);
++	pf_state_peer_to_pfioc(&st->dst, &sp->dst);
+ 
+ 	if (st->rule.ptr == NULL)
+-		sp->rule = htonl(-1);
++		sp->rule = -1;
+ 	else
+-		sp->rule = htonl(st->rule.ptr->nr);
++		sp->rule = st->rule.ptr->nr;
+ 	if (st->anchor.ptr == NULL)
+-		sp->anchor = htonl(-1);
++		sp->anchor = -1;
+ 	else
+-		sp->anchor = htonl(st->anchor.ptr->nr);
++		sp->anchor = st->anchor.ptr->nr;
+ 	if (st->nat_rule.ptr == NULL)
+-		sp->nat_rule = htonl(-1);
++		sp->nat_rule = -1;
+ 	else
+-		sp->nat_rule = htonl(st->nat_rule.ptr->nr);
++		sp->nat_rule = st->nat_rule.ptr->nr;
+ 
+-	pf_state_counter_hton(st->packets[0], sp->packets[0]);
+-	pf_state_counter_hton(st->packets[1], sp->packets[1]);
+-	pf_state_counter_hton(st->bytes[0], sp->bytes[0]);
+-	pf_state_counter_hton(st->bytes[1], sp->bytes[1]);
++	sp->packets[0] = st->packets[0];
++	sp->packets[1] = st->packets[1];
++	sp->bytes[0] = st->bytes[0];
++	sp->bytes[1] = st->bytes[1];
++}
+ 
++static int
++pfioc_state_import(struct pfioc_state *sp)
++{
++	struct pfioc_state_key *kw, *ks;
++	struct pf_state	*st = NULL;
++	struct pf_state_key *skw = NULL, *sks = NULL;
++	struct pf_rule *r = NULL;
++	struct pfi_kif	*kif;
++	int error;
++
++	PF_RULES_RASSERT();
++
++	if (sp->creatorid == 0) {
++		if (V_pf_status.debug >= PF_DEBUG_MISC)
++			printf("%s: invalid creator id: %08x\n", __func__,
++			    ntohl(sp->creatorid));
++		return (EINVAL);
++	}
++
++	if ((kif = pfi_kif_find(sp->ifname)) == NULL) {
++		if (V_pf_status.debug >= PF_DEBUG_MISC)
++			printf("%s: unknown interface: %s\n", __func__,
++			    sp->ifname);
++		return (EINVAL);
++	}
++
++	if (sp->rule != -1 && sp->anchor == -1 && sp->rule <
++	    pf_main_ruleset.rules[PF_RULESET_FILTER].active.rcount)
++		r = pf_main_ruleset.rules[
++		    PF_RULESET_FILTER].active.ptr_array[sp->rule];
++	else
++		r = &V_pf_default_rule;
++
++	if ((r->max_states &&
++	    counter_u64_fetch(r->states_cur) >= r->max_states))
++		goto cleanup;
++
++	/*
++	 * XXXGL: consider M_WAITOK.
++	 */
++	if ((st = uma_zalloc(V_pf_state_z, M_NOWAIT | M_ZERO)) == NULL)
++		goto cleanup;
++
++	if ((skw = uma_zalloc(V_pf_state_key_z, M_NOWAIT)) == NULL)
++		goto cleanup;
++
++	kw = &sp->key[PF_SK_WIRE];
++	ks = &sp->key[PF_SK_STACK];
++
++	if (PF_ANEQ(&kw->addr[0], &ks->addr[0], sp->af) ||
++	    PF_ANEQ(&kw->addr[1], &ks->addr[1], sp->af) ||
++	    kw->port[0] != ks->port[0] ||
++	    kw->port[1] != ks->port[1]) {
++		sks = uma_zalloc(V_pf_state_key_z, M_NOWAIT);
++		if (sks == NULL)
++			goto cleanup;
++	} else
++		sks = skw;
++
++	/* allocate memory for scrub info */
++	if (pfioc_alloc_scrub_memory(&sp->src, &st->src) ||
++	    pfioc_alloc_scrub_memory(&sp->dst, &st->dst))
++		goto cleanup;
++
++	/* Copy to state key(s). */
++	skw->addr[0] = kw->addr[0];
++	skw->addr[1] = kw->addr[1];
++	skw->port[0] = kw->port[0];
++	skw->port[1] = kw->port[1];
++	skw->proto = sp->proto;
++	skw->af = sp->af;
++	if (sks != skw) {
++		sks->addr[0] = ks->addr[0];
++		sks->addr[1] = ks->addr[1];
++		sks->port[0] = ks->port[0];
++		sks->port[1] = ks->port[1];
++		sks->proto = sp->proto;
++		sks->af = sp->af;
++	}
++
++	/* copy to state */
++	bcopy(&sp->rt_addr, &st->rt_addr, sizeof(st->rt_addr));
++	st->creation = time_uptime - sp->creation;
++	st->expire = time_uptime;
++	if (sp->expire) {
++		uint32_t timeout;
++
++		timeout = r->timeout[sp->timeout];
++		if (!timeout)
++			timeout = V_pf_default_rule.timeout[sp->timeout];
++
++		/* sp->expire may have been adaptively scaled by export. */
++		st->expire -= timeout - sp->expire;
++	}
++
++	st->direction = sp->direction;
++	st->log = sp->log;
++	st->timeout = sp->timeout;
++	st->state_flags = sp->state_flags;
++
++	st->id = sp->id;
++	st->creatorid = sp->creatorid;
++	pf_state_peer_from_pfioc(&sp->src, &st->src);
++	pf_state_peer_from_pfioc(&sp->dst, &st->dst);
++
++	st->rule.ptr = r;
++	st->nat_rule.ptr = NULL;
++	st->anchor.ptr = NULL;
++	st->rt_kif = NULL;
++
++	st->pfsync_time = time_uptime;
++	st->sync_state = PFSYNC_S_NONE;
++
++	if ((error = pf_state_insert(kif, skw, sks, st)) != 0)
++		goto cleanup_state;
++
++	/* XXX when we have nat_rule/anchors, use STATE_INC_COUNTERS */
++	counter_u64_add(r->states_cur, 1);
++	counter_u64_add(r->states_tot, 1);
++
++	st->state_flags &= ~PFSTATE_ACK;
++	PF_STATE_UNLOCK(st);
++
++	return (0);
++
++cleanup:
++	error = ENOMEM;
++	if (skw == sks)
++		sks = NULL;
++	if (skw != NULL)
++		uma_zfree(V_pf_state_key_z, skw);
++	if (sks != NULL)
++		uma_zfree(V_pf_state_key_z, sks);
++
++cleanup_state:	/* pf_state_insert() frees the state keys. */
++	if (st) {
++		if (st->dst.scrub)
++			uma_zfree(V_pf_state_scrub_z, st->dst.scrub);
++		if (st->src.scrub)
++			uma_zfree(V_pf_state_scrub_z, st->src.scrub);
++		uma_zfree(V_pf_state_z, st);
++	}
++	return (error);
+ }
+ 
+ static void
+Index: sys/netpfil/pf/if_pfsync.c
+===================================================================
+--- sys/netpfil/pf/if_pfsync.c	(revision 277773)
++++ sys/netpfil/pf/if_pfsync.c	(working copy)
+@@ -398,6 +398,67 @@ pfsync_alloc_scrub_memory(struct pfsync_state_peer
+ }
+ 
+ 
++static void
++pfsync_state_export(struct pfsync_state *sp, struct pf_state *st)
++{
++	bzero(sp, sizeof(struct pfsync_state));
++
++	/* copy from state key */
++	sp->key[PF_SK_WIRE].addr[0] = st->key[PF_SK_WIRE]->addr[0];
++	sp->key[PF_SK_WIRE].addr[1] = st->key[PF_SK_WIRE]->addr[1];
++	sp->key[PF_SK_WIRE].port[0] = st->key[PF_SK_WIRE]->port[0];
++	sp->key[PF_SK_WIRE].port[1] = st->key[PF_SK_WIRE]->port[1];
++	sp->key[PF_SK_STACK].addr[0] = st->key[PF_SK_STACK]->addr[0];
++	sp->key[PF_SK_STACK].addr[1] = st->key[PF_SK_STACK]->addr[1];
++	sp->key[PF_SK_STACK].port[0] = st->key[PF_SK_STACK]->port[0];
++	sp->key[PF_SK_STACK].port[1] = st->key[PF_SK_STACK]->port[1];
++	sp->proto = st->key[PF_SK_WIRE]->proto;
++	sp->af = st->key[PF_SK_WIRE]->af;
++
++	/* copy from state */
++	strlcpy(sp->ifname, st->kif->pfik_name, sizeof(sp->ifname));
++	bcopy(&st->rt_addr, &sp->rt_addr, sizeof(sp->rt_addr));
++	sp->creation = htonl(time_uptime - st->creation);
++	sp->expire = pf_state_expires(st);
++	if (sp->expire <= time_uptime)
++		sp->expire = htonl(0);
++	else
++		sp->expire = htonl(sp->expire - time_uptime);
++
++	sp->direction = st->direction;
++	sp->log = st->log;
++	sp->timeout = st->timeout;
++	sp->state_flags = st->state_flags;
++	if (st->src_node)
++		sp->sync_flags |= PFSYNC_FLAG_SRCNODE;
++	if (st->nat_src_node)
++		sp->sync_flags |= PFSYNC_FLAG_NATSRCNODE;
++
++	sp->id = st->id;
++	sp->creatorid = st->creatorid;
++	pf_state_peer_hton(&st->src, &sp->src);
++	pf_state_peer_hton(&st->dst, &sp->dst);
++
++	if (st->rule.ptr == NULL)
++		sp->rule = htonl(-1);
++	else
++		sp->rule = htonl(st->rule.ptr->nr);
++	if (st->anchor.ptr == NULL)
++		sp->anchor = htonl(-1);
++	else
++		sp->anchor = htonl(st->anchor.ptr->nr);
++	if (st->nat_rule.ptr == NULL)
++		sp->nat_rule = htonl(-1);
++	else
++		sp->nat_rule = htonl(st->nat_rule.ptr->nr);
++
++	pf_state_counter_hton(st->packets[0], sp->packets[0]);
++	pf_state_counter_hton(st->packets[1], sp->packets[1]);
++	pf_state_counter_hton(st->bytes[0], sp->bytes[0]);
++	pf_state_counter_hton(st->bytes[1], sp->bytes[1]);
++
++}
++
+ static int
+ pfsync_state_import(struct pfsync_state *sp, u_int8_t flags)
+ {
+@@ -425,17 +486,15 @@ pfsync_state_import(struct pfsync_state *sp, u_int
+ 		if (V_pf_status.debug >= PF_DEBUG_MISC)
+ 			printf("%s: unknown interface: %s\n", __func__,
+ 			    sp->ifname);
+-		if (flags & PFSYNC_SI_IOCTL)
+-			return (EINVAL);
+ 		return (0);	/* skip this state */
+ 	}
+ 
+ 	/*
+-	 * If the ruleset checksums match or the state is coming from the ioctl,
++	 * If the ruleset checksums match,
+ 	 * it's safe to associate the state with the rule of that number.
+ 	 */
+ 	if (sp->rule != htonl(-1) && sp->anchor == htonl(-1) &&
+-	    (flags & (PFSYNC_SI_IOCTL | PFSYNC_SI_CKSUM)) && ntohl(sp->rule) <
++	    (flags & PFSYNC_SI_CKSUM) && ntohl(sp->rule) <
+ 	    pf_main_ruleset.rules[PF_RULESET_FILTER].active.rcount)
+ 		r = pf_main_ruleset.rules[
+ 		    PF_RULESET_FILTER].active.ptr_array[ntohl(sp->rule)];
+@@ -446,9 +505,6 @@ pfsync_state_import(struct pfsync_state *sp, u_int
+ 	    counter_u64_fetch(r->states_cur) >= r->max_states))
+ 		goto cleanup;
+ 
+-	/*
+-	 * XXXGL: consider M_WAITOK in ioctl path after.
+-	 */
+ 	if ((st = uma_zalloc(V_pf_state_z, M_NOWAIT | M_ZERO)) == NULL)
+ 		goto cleanup;
+ 
+@@ -526,11 +582,8 @@ pfsync_state_import(struct pfsync_state *sp, u_int
+ 	st->rt_kif = NULL;
+ 
+ 	st->pfsync_time = time_uptime;
+-	st->sync_state = PFSYNC_S_NONE;
++	st->sync_state = PFSYNC_S_NONE | PFSTATE_NOSYNC;
+ 
+-	if (!(flags & PFSYNC_SI_IOCTL))
+-		st->state_flags |= PFSTATE_NOSYNC;
+-
+ 	if ((error = pf_state_insert(kif, skw, sks, st)) != 0)
+ 		goto cleanup_state;
+ 
+@@ -538,12 +591,10 @@ pfsync_state_import(struct pfsync_state *sp, u_int
+ 	counter_u64_add(r->states_cur, 1);
+ 	counter_u64_add(r->states_tot, 1);
+ 
+-	if (!(flags & PFSYNC_SI_IOCTL)) {
+-		st->state_flags &= ~PFSTATE_NOSYNC;
+-		if (st->state_flags & PFSTATE_ACK) {
+-			pfsync_q_ins(st, PFSYNC_S_IACK);
+-			pfsync_push(sc);
+-		}
++	st->state_flags &= ~PFSTATE_NOSYNC;
++	if (st->state_flags & PFSTATE_ACK) {
++		pfsync_q_ins(st, PFSYNC_S_IACK);
++		pfsync_push(sc);
+ 	}
+ 	st->state_flags &= ~PFSTATE_ACK;
+ 	PF_STATE_UNLOCK(st);
+@@ -2292,7 +2343,6 @@ pfsync_pointers_init()
+ {
+ 
+ 	PF_RULES_WLOCK();
+-	pfsync_state_import_ptr = pfsync_state_import;
+ 	pfsync_insert_state_ptr = pfsync_insert_state;
+ 	pfsync_update_state_ptr = pfsync_update_state;
+ 	pfsync_delete_state_ptr = pfsync_delete_state;
+@@ -2306,7 +2356,6 @@ pfsync_pointers_uninit()
+ {
+ 
+ 	PF_RULES_WLOCK();
+-	pfsync_state_import_ptr = NULL;
+ 	pfsync_insert_state_ptr = NULL;
+ 	pfsync_update_state_ptr = NULL;
+ 	pfsync_delete_state_ptr = NULL;
+Index: sbin/pfctl/pf_print_state.c
+===================================================================
+--- sbin/pfctl/pf_print_state.c	(revision 277773)
++++ sbin/pfctl/pf_print_state.c	(working copy)
+@@ -194,21 +194,20 @@ print_host(struct pf_addr *addr, u_int16_t port, s
+ }
+ 
+ void
+-print_seq(struct pfsync_state_peer *p)
++print_seq(struct pfioc_state_peer *p)
+ {
+ 	if (p->seqdiff)
+-		printf("[%u + %u](+%u)", ntohl(p->seqlo),
+-		    ntohl(p->seqhi) - ntohl(p->seqlo), ntohl(p->seqdiff));
++		printf("[%u + %u](+%u)", p->seqlo, p->seqhi - p->seqlo,
++		    p->seqdiff);
+ 	else
+-		printf("[%u + %u]", ntohl(p->seqlo),
+-		    ntohl(p->seqhi) - ntohl(p->seqlo));
++		printf("[%u + %u]", p->seqlo, p->seqhi - p->seqlo);
+ }
+ 
+ void
+-print_state(struct pfsync_state *s, int opts)
++print_state(struct pfioc_state *s, int opts)
+ {
+-	struct pfsync_state_peer *src, *dst;
+-	struct pfsync_state_key *sk, *nk;
++	struct pfioc_state_peer *src, *dst;
++	struct pfioc_state_key *sk, *nk;
+ 	struct protoent *p;
+ 	int min, sec;
+ 
+@@ -301,10 +300,8 @@ void
+ 	}
+ 
+ 	if (opts & PF_OPT_VERBOSE) {
+-		u_int64_t packets[2];
+-		u_int64_t bytes[2];
+-		u_int32_t creation = ntohl(s->creation);
+-		u_int32_t expire = ntohl(s->expire);
++		u_int32_t creation = s->creation;
++		u_int32_t expire = s->expire;
+ 
+ 		sec = creation % 60;
+ 		creation /= 60;
+@@ -317,19 +314,13 @@ void
+ 		expire /= 60;
+ 		printf(", expires in %.2u:%.2u:%.2u", expire, min, sec);
+ 
+-		bcopy(s->packets[0], &packets[0], sizeof(u_int64_t));
+-		bcopy(s->packets[1], &packets[1], sizeof(u_int64_t));
+-		bcopy(s->bytes[0], &bytes[0], sizeof(u_int64_t));
+-		bcopy(s->bytes[1], &bytes[1], sizeof(u_int64_t));
+ 		printf(", %ju:%ju pkts, %ju:%ju bytes",
+-		    (uintmax_t )be64toh(packets[0]),
+-		    (uintmax_t )be64toh(packets[1]),
+-		    (uintmax_t )be64toh(bytes[0]),
+-		    (uintmax_t )be64toh(bytes[1]));
+-		if (ntohl(s->anchor) != -1)
+-			printf(", anchor %u", ntohl(s->anchor));
+-		if (ntohl(s->rule) != -1)
+-			printf(", rule %u", ntohl(s->rule));
++		    (uintmax_t)s->packets[0], (uintmax_t)s->packets[1],
++		    (uintmax_t)s->bytes[0], (uintmax_t)s->bytes[1]);
++		if (s->anchor != -1)
++			printf(", anchor %u", s->anchor);
++		if (s->rule != -1)
++			printf(", rule %u", s->rule);
+ 		if (s->state_flags & PFSTATE_SLOPPY)
+ 			printf(", sloppy");
+ 		if (s->sync_flags & PFSYNC_FLAG_SRCNODE)
+@@ -339,11 +330,8 @@ void
+ 		printf("\n");
+ 	}
+ 	if (opts & PF_OPT_VERBOSE2) {
+-		u_int64_t id;
+-
+-		bcopy(&s->id, &id, sizeof(u_int64_t));
+ 		printf("   id: %016jx creatorid: %08x",
+-		    (uintmax_t )be64toh(id), ntohl(s->creatorid));
++		    (uintmax_t)be64toh(s->id), ntohl(s->creatorid));
+ 		printf("\n");
+ 	}
+ }
+Index: sbin/pfctl/pfctl.c
+===================================================================
+--- sbin/pfctl/pfctl.c	(revision 277773)
++++ sbin/pfctl/pfctl.c	(working copy)
+@@ -1051,7 +1051,7 @@ int
+ pfctl_show_states(int dev, const char *iface, int opts)
+ {
+ 	struct pfioc_states ps;
+-	struct pfsync_state *p;
++	struct pfioc_state *p;
+ 	char *inbuf = NULL, *newinbuf = NULL;
+ 	unsigned int len = 0;
+ 	int i, dotitle = (opts & PF_OPT_SHOWALL);
+Index: sbin/pfctl/pfctl.h
+===================================================================
+--- sbin/pfctl/pfctl.h	(revision 277773)
++++ sbin/pfctl/pfctl.h	(working copy)
+@@ -117,8 +117,8 @@ char		*rate2str(double);
+ 
+ void	 print_addr(struct pf_addr_wrap *, sa_family_t, int);
+ void	 print_host(struct pf_addr *, u_int16_t p, sa_family_t, int);
+-void	 print_seq(struct pfsync_state_peer *);
+-void	 print_state(struct pfsync_state *, int);
++void	 print_seq(struct pfioc_state_peer *);
++void	 print_state(struct pfioc_state *, int);
+ int	 unmask(struct pf_addr *, sa_family_t);
+ 
+ int	 pfctl_cmdline_symset(char *);
+Index: share/man/man4/pf.4
+===================================================================
+--- share/man/man4/pf.4	(revision 277773)
++++ share/man/man4/pf.4	(working copy)
+@@ -323,7 +323,28 @@ if another process is concurrently updating a rule
+ Add a state entry.
+ .Bd -literal
+ struct pfioc_state {
+-	struct pfsync_state	state;
++	u_int64_t	id;
++	char		ifname[IFNAMSIZ];
++	struct pfioc_state_key	key[2];
++	struct pfioc_state_peer	src;
++	struct pfioc_state_peer	dst;
++	struct pf_addr	rt_addr;
++	u_int32_t	rule;
++	u_int32_t	anchor;
++	u_int32_t	nat_rule;
++	u_int32_t	creation;
++	u_int32_t	expire;
++	u_int32_t	creatorid;
++	u_int64_t	packets[2];
++	u_int64_t	bytes[2];
++	sa_family_t	af;
++	u_int8_t	proto;
++	u_int8_t	direction;
++	u_int8_t	log;
++	u_int8_t	state_flags;
++	u_int8_t	timeout;
++	u_int8_t	sync_flags;
++	u_int8_t	updates;
+ };
+ .Ed
+ .It Dv DIOCGETSTATE Fa "struct pfioc_state *ps"
+@@ -421,8 +442,8 @@ Get state table entries.
+ struct pfioc_states {
+ 	int	ps_len;
+ 	union {
+-		caddr_t		 psu_buf;
+-		struct pf_state *psu_states;
++		caddr_t			 psu_buf;
++		struct pfioc_state	*psu_states;
+ 	} ps_u;
+ #define ps_buf		ps_u.psu_buf
+ #define ps_states	ps_u.psu_states
+@@ -438,7 +459,7 @@ On exit,
+ .Va ps_len
+ is always set to the total size required to hold all state table entries
+ (i.e., it is set to
+-.Li sizeof(struct pf_state) * nr ) .
++.Li sizeof(struct pfioc_state) * nr ) .
+ .It Dv DIOCCHANGERULE Fa "struct pfioc_rule *pcr"
+ Add or remove the
+ .Va rule

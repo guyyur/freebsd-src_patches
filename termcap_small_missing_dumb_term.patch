@@ -1,0 +1,12 @@
+Index: etc/termcap.small
+===================================================================
+--- etc/termcap.small	(revision 277773)
++++ etc/termcap.small	(working copy)
+@@ -313,3 +313,7 @@ xterm-r6|xterm-old|X11R6 xterm:\
+ xterm-r6-clear:\
+ 	:te=\E[2J\E[?47l\E8:ti=\E7\E[?47h:ue=\E[m:\
+ 	:tc=xterm-r6:
++
++# See login.c for "su"
++dumb:\
++	:am:co#80:do=^J:

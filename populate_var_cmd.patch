@@ -1,0 +1,89 @@
+Index: etc/defaults/rc.conf
+===================================================================
+--- etc/defaults/rc.conf	(revision 277773)
++++ etc/defaults/rc.conf	(working copy)
+@@ -52,6 +52,7 @@ varmfs="AUTO"		# Set to YES to always create an mf
+ varsize="32m"		# Size of mfs /var if created
+ varmfs_flags="-S"	# Extra mount options for the mfs /var
+ populate_var="AUTO"	# Set to YES to always (re)populate /var, NO to never
++#populate_var_cmd=""	# Additional command to execute for (re)populating /var
+ cleanvar_enable="YES" 	# Clean the /var directory
+ local_startup="/usr/local/etc/rc.d" # startup script dirs.
+ script_name_sep=" "	# Change if your startup scripts' names contain spaces
+Index: etc/rc.d/var
+===================================================================
+--- etc/rc.d/var	(revision 277773)
++++ etc/rc.d/var	(working copy)
+@@ -41,6 +41,13 @@ load_rc_config $name
+ 
+ populate_var()
+ {
++	if [ ! -x /usr/sbin/mtree ]; then
++		# We need mtree to populate /var so try mounting /usr.
++		# If this does not work, we can not boot so it is OK to
++		# try to mount out of order.
++		mount /usr
++		[ ! -x /usr/sbin/mtree ] && exit 1
++	fi
+ 	/usr/sbin/mtree -deU -f /etc/mtree/BSD.var.dist -p /var > /dev/null
+ 	case ${sendmail_enable} in
+ 	[Nn][Oo][Nn][Ee])
+@@ -49,6 +56,9 @@ populate_var()
+ 		/usr/sbin/mtree -deU -f /etc/mtree/BSD.sendmail.dist -p / > /dev/null
+ 		;;
+ 	esac
++	if [ -n "${populate_var_cmd}" ]; then
++		eval ${populate_var_cmd}
++	fi
+ }
+ 
+ # If we do not have a writable /var, create a memory filesystem for /var
+@@ -71,9 +81,7 @@ case "${varmfs}" in
+ esac
+ 
+ 
+-# If we have an empty looking /var, populate it, but only if we have
+-# /usr available.  Hopefully, we'll eventually find a workaround, but
+-# in realistic diskless setups, we're probably ok.
++# If explicitly requested or we have an empty looking /var, populate it.
+ case "${populate_var}" in
+ [Yy][Ee][Ss])
+ 	populate_var
+@@ -84,18 +92,8 @@ case "${populate_var}" in
+ *)
+ 	if [ -d /var/run -a -d /var/db -a -d /var/empty ] ; then
+ 		true
+-	elif [ -x /usr/sbin/mtree ] ; then
++	else
+ 		populate_var
+-	else
+-		# We need mtree to populate /var so try mounting /usr.
+-		# If this does not work, we can not boot so it is OK to
+-		# try to mount out of order.
+-		mount /usr
+-		if [ ! -x /usr/sbin/mtree ] ; then
+-			exit 1
+-		else
+-			populate_var
+-		fi
+ 	fi
+ 	;;
+ esac
+Index: share/man/man5/rc.conf.5
+===================================================================
+--- share/man/man5/rc.conf.5	(revision 277773)
++++ share/man/man5/rc.conf.5	(working copy)
+@@ -386,6 +386,13 @@ Note that this process requires access to certain
+ before
+ .Pa /usr
+ is mounted on normal systems.
++.It Va populate_var_cmd
++.Pq Vt str
++Additional command to execute after
++.Pa /var
++has been mounted.
++Note that the command is passed to
++.Ic eval.
+ .It Va cleanvar_enable
+ .Pq Vt bool
+ Clean the

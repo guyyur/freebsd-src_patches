@@ -1,0 +1,122 @@
+Index: usr.sbin/rtadvd/control.c
+===================================================================
+--- usr.sbin/rtadvd/control.c	(revision 264366)
++++ usr.sbin/rtadvd/control.c	(working copy)
+@@ -343,7 +343,10 @@ struct ctrl_msg_pl *
+ cm_bin2pl(char *str, struct ctrl_msg_pl *cp)
+ {
+ 	size_t len;
+-	size_t *lenp;
++	struct unaligned_len {
++		size_t len;
++	} __packed;
++	struct unaligned_len *lenp;
+ 	char *p;
+ 
+ 	memset(cp, 0, sizeof(*cp));
+@@ -350,9 +353,9 @@ cm_bin2pl(char *str, struct ctrl_msg_pl *cp)
+ 
+ 	p = str;
+ 
+-	lenp = (size_t *)p;
+-	len = *lenp++;
+-	p = (char *)lenp;
++	lenp = (struct unaligned_len *)p;
++	len = lenp->len;
++	p = (char *)(lenp + 1);
+ 	syslog(LOG_DEBUG, "<%s> len(ifname) = %zu", __func__, len);
+ 	if (len > 0) {
+ 		cp->cp_ifname = malloc(len + 1);
+@@ -365,9 +368,9 @@ cm_bin2pl(char *str, struct ctrl_msg_pl *cp)
+ 		p += len;
+ 	}
+ 
+-	lenp = (size_t *)p;
+-	len = *lenp++;
+-	p = (char *)lenp;
++	lenp = (struct unaligned_len *)p;
++	len = lenp->len;
++	p = (char *)(lenp + 1);
+ 	syslog(LOG_DEBUG, "<%s> len(key) = %zu", __func__, len);
+ 	if (len > 0) {
+ 		cp->cp_key = malloc(len + 1);
+@@ -380,9 +383,9 @@ cm_bin2pl(char *str, struct ctrl_msg_pl *cp)
+ 		p += len;
+ 	}
+ 
+-	lenp = (size_t *)p;
+-	len = *lenp++;
+-	p = (char *)lenp;
++	lenp = (struct unaligned_len *)p;
++	len = lenp->len;
++	p = (char *)(lenp + 1);
+ 	syslog(LOG_DEBUG, "<%s> len(val) = %zu", __func__, len);
+ 	if (len > 0) {
+ 		cp->cp_val = malloc(len + 1);
+@@ -403,7 +406,10 @@ size_t
+ cm_pl2bin(char *str, struct ctrl_msg_pl *cp)
+ {
+ 	size_t len;
+-	size_t *lenp;
++	struct unaligned_len {
++		size_t len;
++	} __packed;
++	struct unaligned_len *lenp;
+ 	char *p;
+ 	struct ctrl_msg_hdr *cm;
+ 
+@@ -425,38 +431,38 @@ cm_pl2bin(char *str, struct ctrl_msg_pl *cp)
+ 	syslog(LOG_DEBUG, "<%s> msglen=%zu", __func__, len);
+ 	memset(str, 0, len);
+ 	p = str;
+-	lenp = (size_t *)p;
+-	
++	lenp = (struct unaligned_len *)p;
++
+ 	if (cp->cp_ifname != NULL) {
+-		*lenp++ = strlen(cp->cp_ifname);
+-		p = (char *)lenp;
++		lenp->len = strlen(cp->cp_ifname);
++		p = (char *)(lenp + 1);
+ 		memcpy(p, cp->cp_ifname, strlen(cp->cp_ifname));
+ 		p += strlen(cp->cp_ifname);
+ 	} else {
+-		*lenp++ = '\0';
+-		p = (char *)lenp;
++		lenp->len = 0;
++		p = (char *)(lenp + 1);
+ 	}
+ 
+-	lenp = (size_t *)p;
++	lenp = (struct unaligned_len *)p;
+ 	if (cp->cp_key != NULL) {
+-		*lenp++ = strlen(cp->cp_key);
+-		p = (char *)lenp;
++		lenp->len = strlen(cp->cp_key);
++		p = (char *)(lenp + 1);
+ 		memcpy(p, cp->cp_key, strlen(cp->cp_key));
+ 		p += strlen(cp->cp_key);
+ 	} else {
+-		*lenp++ = '\0';
+-		p = (char *)lenp;
++		lenp->len = 0;
++		p = (char *)(lenp + 1);
+ 	}
+ 
+-	lenp = (size_t *)p;
++	lenp = (struct unaligned_len *)p;
+ 	if (cp->cp_val != NULL && cp->cp_val_len > 0) {
+-		*lenp++ = cp->cp_val_len;
+-		p = (char *)lenp;
++		lenp->len = cp->cp_val_len;
++		p = (char *)(lenp + 1);
+ 		memcpy(p, cp->cp_val, cp->cp_val_len);
+ 		p += cp->cp_val_len;
+ 	} else {
+-		*lenp++ = '\0';
+-		p = (char *)lenp;
++		lenp->len = 0;
++		p = (char *)(lenp + 1);
+ 	}
+ 
+ 	return (len);

@@ -1,0 +1,20 @@
+Index: sbin/newfs_msdos/newfs_msdos.c
+===================================================================
+--- sbin/newfs_msdos/newfs_msdos.c	(revision 277773)
++++ sbin/newfs_msdos/newfs_msdos.c	(working copy)
+@@ -402,15 +402,8 @@ main(int argc, char *argv[])
+     if (oflag)
+ 	bpb.bpbHiddenSecs = opt_o;
+     if (!(opt_f || (opt_h && opt_u && opt_S && opt_s && oflag))) {
+-	off_t delta;
+ 	getdiskinfo(fd, fname, dtype, oflag, &bpb);
+ 	bpb.bpbHugeSectors -= (opt_ofs / bpb.bpbBytesPerSec);
+-	delta = bpb.bpbHugeSectors % bpb.bpbSecPerTrack;
+-	if (delta != 0) {
+-	    warnx("trim %d sectors to adjust to a multiple of %d",
+-		(int)delta, bpb.bpbSecPerTrack);
+-	    bpb.bpbHugeSectors -= delta;
+-	}
+ 	if (bpb.bpbSecPerClust == 0) {	/* set defaults */
+ 	    if (bpb.bpbHugeSectors <= 6000)	/* about 3MB -> 512 bytes */
+ 		bpb.bpbSecPerClust = 1;

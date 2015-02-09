@@ -1,0 +1,17 @@
+Index: usr.sbin/wpa/Makefile
+===================================================================
+--- usr.sbin/wpa/Makefile	(revision 277773)
++++ usr.sbin/wpa/Makefile	(working copy)
+@@ -1,7 +1,12 @@
+ # $FreeBSD$
+ 
++.include <src.opts.mk>
++
+ SUBDIR= wpa_supplicant wpa_cli wpa_passphrase
+ SUBDIR+= hostapd hostapd_cli
++
++.if ${MK_NDIS} != "no"
+ SUBDIR+= ndis_events
++.endif
+ 
+ .include <bsd.subdir.mk>

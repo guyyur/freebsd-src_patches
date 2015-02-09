@@ -1,0 +1,566 @@
+Index: sys/netinet6/in6.c
+===================================================================
+--- sys/netinet6/in6.c	(revision 277773)
++++ sys/netinet6/in6.c	(working copy)
+@@ -657,53 +657,22 @@ in6_control(struct socket *so, u_long cmd, caddr_t
+ 		pr0.ndpr_vltime = ifra->ifra_lifetime.ia6t_vltime;
+ 		pr0.ndpr_pltime = ifra->ifra_lifetime.ia6t_pltime;
+ 
+-		/* add the prefix if not yet. */
+-		if ((pr = nd6_prefix_lookup(&pr0)) == NULL) {
+-			/*
+-			 * nd6_prelist_add will install the corresponding
+-			 * interface route.
+-			 */
+-			if ((error = nd6_prelist_add(&pr0, NULL, &pr)) != 0) {
+-				if (carp_attached)
+-					(*carp_detach_p)(&ia->ia_ifa);
+-				goto out;
+-			}
+-			if (pr == NULL) {
+-				if (carp_attached)
+-					(*carp_detach_p)(&ia->ia_ifa);
+-				log(LOG_ERR, "nd6_prelist_add succeeded but "
+-				    "no prefix\n");
+-				error = EINVAL;
+-				goto out;
+-			}
++		/* add or update the prefix. */
++		if ((error = prelist_update(&pr0, NULL, NULL, 0, &pr, ia)) !=
++		    0) {
++			if (carp_attached)
++				(*carp_detach_p)(&ia->ia_ifa);
++			goto out;
+ 		}
+-
+-		/* relate the address to the prefix */
+-		if (ia->ia6_ndpr == NULL) {
+-			ia->ia6_ndpr = pr;
+-			pr->ndpr_refcnt++;
+-
+-			/*
+-			 * If this is the first autoconf address from the
+-			 * prefix, create a temporary address as well
+-			 * (when required).
+-			 */
+-			if ((ia->ia6_flags & IN6_IFF_AUTOCONF) &&
+-			    V_ip6_use_tempaddr && pr->ndpr_refcnt == 1) {
+-				int e;
+-				if ((e = in6_tmpifadd(ia, 1, 0)) != 0) {
+-					log(LOG_NOTICE, "in6_control: failed "
+-					    "to create a temporary address, "
+-					    "errno=%d\n", e);
+-				}
+-			}
++		if (pr == NULL) {
++			if (carp_attached)
++				(*carp_detach_p)(&ia->ia_ifa);
++			log(LOG_ERR, "prelist_update succeeded but "
++			    "no prefix\n");
++			error = EINVAL;
++			goto out;
+ 		}
+ 
+-		/*
+-		 * this might affect the status of autoconfigured addresses,
+-		 * that is, this address might make other addresses detached.
+-		 */
+-		pfxlist_onlink_check();
+ aifaddr_out:
+ 		if (error != 0 || ia == NULL)
+ 			break;
+Index: sys/netinet6/nd6.h
+===================================================================
+--- sys/netinet6/nd6.h	(revision 277773)
++++ sys/netinet6/nd6.h	(working copy)
+@@ -439,6 +439,8 @@ void defrouter_reset(void);
+ void defrouter_select(void);
+ void defrtrlist_del(struct nd_defrouter *);
+ void prelist_remove(struct nd_prefix *);
++int prelist_update(struct nd_prefixctl *, struct nd_defrouter *,
++	struct mbuf *, int, struct nd_prefix **, struct in6_ifaddr *);
+ int nd6_prelist_add(struct nd_prefixctl *, struct nd_defrouter *,
+ 	struct nd_prefix **);
+ void pfxlist_onlink_check(void);
+Index: sys/netinet6/nd6_rtr.c
+===================================================================
+--- sys/netinet6/nd6_rtr.c	(revision 277773)
++++ sys/netinet6/nd6_rtr.c	(working copy)
+@@ -69,8 +69,6 @@ __FBSDID("$FreeBSD$");
+ 
+ static int rtpref(struct nd_defrouter *);
+ static struct nd_defrouter *defrtrlist_update(struct nd_defrouter *);
+-static int prelist_update(struct nd_prefixctl *, struct nd_defrouter *,
+-    struct mbuf *, int);
+ static struct in6_ifaddr *in6_ifadd(struct nd_prefixctl *, int);
+ static struct nd_pfxrouter *pfxrtr_lookup(struct nd_prefix *,
+ 	struct nd_defrouter *);
+@@ -357,7 +355,7 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len
+ 			pr.ndpr_plen = pi->nd_opt_pi_prefix_len;
+ 			pr.ndpr_vltime = ntohl(pi->nd_opt_pi_valid_time);
+ 			pr.ndpr_pltime = ntohl(pi->nd_opt_pi_preferred_time);
+-			(void)prelist_update(&pr, dr, m, mcast);
++			(void)prelist_update(&pr, dr, m, mcast, NULL, NULL);
+ 		}
+ 	}
+ 
+@@ -951,11 +949,12 @@ prelist_remove(struct nd_prefix *pr)
+  * dr - may be NULL
+  */
+ 
+-static int
++int
+ prelist_update(struct nd_prefixctl *new, struct nd_defrouter *dr,
+-    struct mbuf *m, int mcast)
++    struct mbuf *m, int mcast, struct nd_prefix **newp,
++    struct in6_ifaddr *ia6)
+ {
+-	struct in6_ifaddr *ia6 = NULL, *ia6_match = NULL;
++	struct in6_ifaddr *ia6_match = NULL;
+ 	struct ifaddr *ifa;
+ 	struct ifnet *ifp = new->ndpr_ifp;
+ 	struct nd_prefix *pr;
+@@ -1035,6 +1034,8 @@ prelist_update(struct nd_prefixctl *new, struct nd
+ 			    ip6_sprintf(ip6buf, &new->ndpr_prefix.sin6_addr),
+ 			    new->ndpr_plen, if_name(new->ndpr_ifp),
+ 			    error, newpr));
++			if (newpr == NULL)
++				error = EINVAL;
+ 			goto end; /* we should just give up in this case. */
+ 		}
+ 
+@@ -1054,6 +1055,16 @@ prelist_update(struct nd_prefixctl *new, struct nd
+ 		pr = newpr;
+ 	}
+ 
++	if (newp != NULL)
++		*newp = pr;
++
++	/* relate the address to the prefix */
++	if (ia6 && ia6->ia6_ndpr == NULL) {
++		/* note that we should use pr (not new) for reference. */
++		ia6->ia6_ndpr = pr;
++		pr->ndpr_refcnt++;
++	}
++
+ 	/*
+ 	 * Address autoconfiguration based on Section 5.5.3 of RFC 2462.
+ 	 * Note that pr must be non NULL at this point.
+@@ -1074,214 +1085,243 @@ prelist_update(struct nd_prefixctl *new, struct nd
+ 		goto end;
+ 	}
+ 
+-	/*
+-	 * 5.5.3 (d).  If the prefix advertised is not equal to the prefix of
+-	 * an address configured by stateless autoconfiguration already in the
+-	 * list of addresses associated with the interface, and the Valid
+-	 * Lifetime is not 0, form an address.  We first check if we have
+-	 * a matching prefix.
+-	 * Note: we apply a clarification in rfc2462bis-02 here.  We only
+-	 * consider autoconfigured addresses while RFC2462 simply said
+-	 * "address".
+-	 */
+-	IF_ADDR_RLOCK(ifp);
+-	TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+-		struct in6_ifaddr *ifa6;
+-		u_int32_t remaininglifetime;
++	/* no address provided, prefix is from RA */
++	if (ia6 == NULL) {
++		/*
++		 * 5.5.3 (d).  If the prefix advertised is not equal to the
++		 * prefix of an address configured by stateless
++		 * autoconfiguration already in the list of addresses
++		 * associated with the interface, and the Valid Lifetime
++		 * is not 0, form an address.  We first check if we have
++		 * a matching prefix.
++		 * Note: we apply a clarification in rfc2462bis-02 here.  We
++		 * only consider autoconfigured addresses while RFC2462 simply
++		 * said "address".
++		 */
++		IF_ADDR_RLOCK(ifp);
++		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
++			struct in6_ifaddr *ifa6;
++			u_int32_t remaininglifetime;
+ 
+-		if (ifa->ifa_addr->sa_family != AF_INET6)
+-			continue;
++			if (ifa->ifa_addr->sa_family != AF_INET6)
++				continue;
+ 
+-		ifa6 = (struct in6_ifaddr *)ifa;
++			ifa6 = (struct in6_ifaddr *)ifa;
+ 
+-		/*
+-		 * We only consider autoconfigured addresses as per rfc2462bis.
+-		 */
+-		if (!(ifa6->ia6_flags & IN6_IFF_AUTOCONF))
+-			continue;
++			/*
++			 * We only consider autoconfigured addresses as per
++			 * rfc2462bis.
++			 */
++			if (!(ifa6->ia6_flags & IN6_IFF_AUTOCONF))
++				continue;
+ 
+-		/*
+-		 * Spec is not clear here, but I believe we should concentrate
+-		 * on unicast (i.e. not anycast) addresses.
+-		 * XXX: other ia6_flags? detached or duplicated?
+-		 */
+-		if ((ifa6->ia6_flags & IN6_IFF_ANYCAST) != 0)
+-			continue;
++			/*
++			 * Spec is not clear here, but I believe we should
++			 * concentrate on unicast (i.e. not anycast)
++			 * addresses.
++			 * XXX: other ia6_flags? detached or duplicated?
++			 */
++			if ((ifa6->ia6_flags & IN6_IFF_ANYCAST) != 0)
++				continue;
+ 
+-		/*
+-		 * Ignore the address if it is not associated with a prefix
+-		 * or is associated with a prefix that is different from this
+-		 * one.  (pr is never NULL here)
+-		 */
+-		if (ifa6->ia6_ndpr != pr)
+-			continue;
++			/*
++			 * Ignore the address if it is not associated with a
++			 * prefix or is associated with a prefix that is
++			 * different from this one.  (pr is never NULL here)
++			 */
++			if (ifa6->ia6_ndpr != pr)
++				continue;
+ 
+-		if (ia6_match == NULL) /* remember the first one */
+-			ia6_match = ifa6;
++			if (ia6_match == NULL) /* remember the first one */
++				ia6_match = ifa6;
+ 
+-		/*
+-		 * An already autoconfigured address matched.  Now that we
+-		 * are sure there is at least one matched address, we can
+-		 * proceed to 5.5.3. (e): update the lifetimes according to the
+-		 * "two hours" rule and the privacy extension.
+-		 * We apply some clarifications in rfc2462bis:
+-		 * - use remaininglifetime instead of storedlifetime as a
+-		 *   variable name
+-		 * - remove the dead code in the "two-hour" rule
+-		 */
+-#define TWOHOUR		(120*60)
+-		lt6_tmp = ifa6->ia6_lifetime;
++			/*
++			 * An already autoconfigured address matched.  Now
++			 * that we are sure there is at least one matched
++			 * address, we can proceed to 5.5.3. (e): update
++			 * the lifetimes according to the "two hours" rule
++			 * and the privacy extension.
++			 * We apply some clarifications in rfc2462bis:
++			 * - use remaininglifetime instead of storedlifetime
++			 *   as a variable name
++			 * - remove the dead code in the "two-hour" rule
++			 */
++#define TWOHOUR			(120*60)
++			lt6_tmp = ifa6->ia6_lifetime;
+ 
+-		if (lt6_tmp.ia6t_vltime == ND6_INFINITE_LIFETIME)
+-			remaininglifetime = ND6_INFINITE_LIFETIME;
+-		else if (time_uptime - ifa6->ia6_updatetime >
+-			 lt6_tmp.ia6t_vltime) {
++			if (lt6_tmp.ia6t_vltime == ND6_INFINITE_LIFETIME)
++				remaininglifetime = ND6_INFINITE_LIFETIME;
++			else if (time_uptime - ifa6->ia6_updatetime >
++				 lt6_tmp.ia6t_vltime) {
++				/*
++				 * The case of "invalid" address.  We should
++				 * usually not see this case.
++				 */
++				remaininglifetime = 0;
++			} else
++				remaininglifetime = lt6_tmp.ia6t_vltime -
++				    (time_uptime - ifa6->ia6_updatetime);
++
+ 			/*
+-			 * The case of "invalid" address.  We should usually
+-			 * not see this case.
++			 * when not updating, keep the current stored
++			 * lifetime.
+ 			 */
+-			remaininglifetime = 0;
+-		} else
+-			remaininglifetime = lt6_tmp.ia6t_vltime -
+-			    (time_uptime - ifa6->ia6_updatetime);
++			lt6_tmp.ia6t_vltime = remaininglifetime;
+ 
+-		/* when not updating, keep the current stored lifetime. */
+-		lt6_tmp.ia6t_vltime = remaininglifetime;
+-
+-		if (TWOHOUR < new->ndpr_vltime ||
+-		    remaininglifetime < new->ndpr_vltime) {
+-			lt6_tmp.ia6t_vltime = new->ndpr_vltime;
+-		} else if (remaininglifetime <= TWOHOUR) {
+-			if (auth) {
++			if (TWOHOUR < new->ndpr_vltime ||
++			    remaininglifetime < new->ndpr_vltime) {
+ 				lt6_tmp.ia6t_vltime = new->ndpr_vltime;
++			} else if (remaininglifetime <= TWOHOUR) {
++				if (auth) {
++					lt6_tmp.ia6t_vltime = new->ndpr_vltime;
++				}
++			} else {
++				/*
++				 * new->ndpr_vltime <= TWOHOUR &&
++				 * TWOHOUR < remaininglifetime
++				 */
++				lt6_tmp.ia6t_vltime = TWOHOUR;
+ 			}
+-		} else {
++
+ 			/*
+-			 * new->ndpr_vltime <= TWOHOUR &&
+-			 * TWOHOUR < remaininglifetime
++			 * The 2 hour rule is not imposed for preferred
++			 * lifetime.
+ 			 */
+-			lt6_tmp.ia6t_vltime = TWOHOUR;
+-		}
++			lt6_tmp.ia6t_pltime = new->ndpr_pltime;
+ 
+-		/* The 2 hour rule is not imposed for preferred lifetime. */
+-		lt6_tmp.ia6t_pltime = new->ndpr_pltime;
++			in6_init_address_ltimes(pr, &lt6_tmp);
+ 
+-		in6_init_address_ltimes(pr, &lt6_tmp);
++			/*
++			 * We need to treat lifetimes for temporary addresses
++			 * differently, according to
++			 * draft-ietf-ipv6-privacy-addrs-v2-01.txt 3.3 (1);
++			 * we only update the lifetimes when they are in the
++			 * maximum intervals.
++			 */
++			if ((ifa6->ia6_flags & IN6_IFF_TEMPORARY) != 0) {
++				u_int32_t maxvltime, maxpltime;
+ 
+-		/*
+-		 * We need to treat lifetimes for temporary addresses
+-		 * differently, according to
+-		 * draft-ietf-ipv6-privacy-addrs-v2-01.txt 3.3 (1);
+-		 * we only update the lifetimes when they are in the maximum
+-		 * intervals.
+-		 */
+-		if ((ifa6->ia6_flags & IN6_IFF_TEMPORARY) != 0) {
+-			u_int32_t maxvltime, maxpltime;
++				if (V_ip6_temp_valid_lifetime >
++				    (u_int32_t)((time_uptime -
++				    ifa6->ia6_createtime) +
++				    V_ip6_desync_factor)) {
++					maxvltime =
++					    V_ip6_temp_valid_lifetime -
++					    (time_uptime -
++					    ifa6->ia6_createtime) -
++					    V_ip6_desync_factor;
++				} else
++					maxvltime = 0;
++				if (V_ip6_temp_preferred_lifetime >
++				    (u_int32_t)((time_uptime -
++				    ifa6->ia6_createtime) +
++				    V_ip6_desync_factor)) {
++					maxpltime =
++					    V_ip6_temp_preferred_lifetime -
++					    (time_uptime -
++					    ifa6->ia6_createtime) -
++					    V_ip6_desync_factor;
++				} else
++					maxpltime = 0;
+ 
+-			if (V_ip6_temp_valid_lifetime >
+-			    (u_int32_t)((time_uptime - ifa6->ia6_createtime) +
+-			    V_ip6_desync_factor)) {
+-				maxvltime = V_ip6_temp_valid_lifetime -
+-				    (time_uptime - ifa6->ia6_createtime) -
+-				    V_ip6_desync_factor;
+-			} else
+-				maxvltime = 0;
+-			if (V_ip6_temp_preferred_lifetime >
+-			    (u_int32_t)((time_uptime - ifa6->ia6_createtime) +
+-			    V_ip6_desync_factor)) {
+-				maxpltime = V_ip6_temp_preferred_lifetime -
+-				    (time_uptime - ifa6->ia6_createtime) -
+-				    V_ip6_desync_factor;
+-			} else
+-				maxpltime = 0;
+-
+-			if (lt6_tmp.ia6t_vltime == ND6_INFINITE_LIFETIME ||
+-			    lt6_tmp.ia6t_vltime > maxvltime) {
+-				lt6_tmp.ia6t_vltime = maxvltime;
++				if (lt6_tmp.ia6t_vltime ==
++				    ND6_INFINITE_LIFETIME ||
++				    lt6_tmp.ia6t_vltime > maxvltime) {
++					lt6_tmp.ia6t_vltime = maxvltime;
++				}
++				if (lt6_tmp.ia6t_pltime ==
++				    ND6_INFINITE_LIFETIME ||
++				    lt6_tmp.ia6t_pltime > maxpltime) {
++					lt6_tmp.ia6t_pltime = maxpltime;
++				}
+ 			}
+-			if (lt6_tmp.ia6t_pltime == ND6_INFINITE_LIFETIME ||
+-			    lt6_tmp.ia6t_pltime > maxpltime) {
+-				lt6_tmp.ia6t_pltime = maxpltime;
+-			}
++			ifa6->ia6_lifetime = lt6_tmp;
++			ifa6->ia6_updatetime = time_uptime;
+ 		}
+-		ifa6->ia6_lifetime = lt6_tmp;
+-		ifa6->ia6_updatetime = time_uptime;
+-	}
+-	IF_ADDR_RUNLOCK(ifp);
+-	if (ia6_match == NULL && new->ndpr_vltime) {
+-		int ifidlen;
++		IF_ADDR_RUNLOCK(ifp);
++		if (ia6_match == NULL && new->ndpr_vltime) {
++			int ifidlen;
+ 
+-		/*
+-		 * 5.5.3 (d) (continued)
+-		 * No address matched and the valid lifetime is non-zero.
+-		 * Create a new address.
+-		 */
+-
+-		/*
+-		 * Prefix Length check:
+-		 * If the sum of the prefix length and interface identifier
+-		 * length does not equal 128 bits, the Prefix Information
+-		 * option MUST be ignored.  The length of the interface
+-		 * identifier is defined in a separate link-type specific
+-		 * document.
+-		 */
+-		ifidlen = in6_if2idlen(ifp);
+-		if (ifidlen < 0) {
+-			/* this should not happen, so we always log it. */
+-			log(LOG_ERR, "prelist_update: IFID undefined (%s)\n",
+-			    if_name(ifp));
+-			goto end;
+-		}
+-		if (ifidlen + pr->ndpr_plen != 128) {
+-			nd6log((LOG_INFO,
+-			    "prelist_update: invalid prefixlen "
+-			    "%d for %s, ignored\n",
+-			    pr->ndpr_plen, if_name(ifp)));
+-			goto end;
+-		}
+-
+-		if ((ia6 = in6_ifadd(new, mcast)) != NULL) {
+ 			/*
+-			 * note that we should use pr (not new) for reference.
++			 * 5.5.3 (d) (continued)
++			 * No address matched and the valid lifetime is
++			 * non-zero.
++			 * Create a new address.
+ 			 */
+-			pr->ndpr_refcnt++;
+-			ia6->ia6_ndpr = pr;
+ 
+ 			/*
+-			 * RFC 3041 3.3 (2).
+-			 * When a new public address is created as described
+-			 * in RFC2462, also create a new temporary address.
+-			 *
+-			 * RFC 3041 3.5.
+-			 * When an interface connects to a new link, a new
+-			 * randomized interface identifier should be generated
+-			 * immediately together with a new set of temporary
+-			 * addresses.  Thus, we specifiy 1 as the 2nd arg of
+-			 * in6_tmpifadd().
++			 * Prefix Length check:
++			 * If the sum of the prefix length and interface
++			 * identifier length does not equal 128 bits, the
++			 * Prefix Information option MUST be ignored.  The
++			 * length of the interface identifier is defined in
++			 * a separate link-type specific document.
+ 			 */
+-			if (V_ip6_use_tempaddr) {
+-				int e;
+-				if ((e = in6_tmpifadd(ia6, 1, 1)) != 0) {
+-					nd6log((LOG_NOTICE, "prelist_update: "
+-					    "failed to create a temporary "
+-					    "address, errno=%d\n",
+-					    e));
+-				}
++			ifidlen = in6_if2idlen(ifp);
++			if (ifidlen < 0) {
++				/*
++				 * this should not happen, so we always log
++				 * it.
++				 */
++				log(LOG_ERR, "prelist_update: IFID undefined "
++				    "(%s)\n", if_name(ifp));
++				goto end;
+ 			}
+-			ifa_free(&ia6->ia_ifa);
++			if (ifidlen + pr->ndpr_plen != 128) {
++				nd6log((LOG_INFO,
++				    "prelist_update: invalid prefixlen "
++				    "%d for %s, ignored\n",
++				    pr->ndpr_plen, if_name(ifp)));
++				goto end;
++			}
+ 
++			if ((ia6 = in6_ifadd(new, mcast)) == NULL) {
++				/* just set an error. do not bark here. */
++				error = EADDRNOTAVAIL; /* XXX: might be unused. */
++				goto end;
++			}
++
+ 			/*
+-			 * A newly added address might affect the status
+-			 * of other addresses, so we check and update it.
+-			 * XXX: what if address duplication happens?
++			 * note that we should use pr (not new) for reference.
+ 			 */
+-			pfxlist_onlink_check();
+-		} else {
+-			/* just set an error. do not bark here. */
+-			error = EADDRNOTAVAIL; /* XXX: might be unused. */
++			pr->ndpr_refcnt++;
++			ia6->ia6_ndpr = pr;
+ 		}
+ 	}
+ 
++	/*
++	 * RFC 3041 3.3 (2).
++	 * When a new public address is created as described
++	 * in RFC2462, also create a new temporary address.
++	 *
++	 * RFC 3041 3.5.
++	 * When an interface connects to a new link, a new
++	 * randomized interface identifier should be generated
++	 * immediately together with a new set of temporary
++	 * addresses.  Thus, we specifiy 1 as the 2nd arg of
++	 * in6_tmpifadd().
++	 */
++	if (V_ip6_use_tempaddr) {
++		int e;
++		if ((e = in6_tmpifadd(ia6, 1, 1)) != 0) {
++			nd6log((LOG_NOTICE, "prelist_update: "
++			    "failed to create a temporary "
++			    "address, errno=%d\n",
++			    e));
++		}
++	}
++
++	/* ia6 was created in this function */
++	if (ia6_match)
++		ifa_free(&ia6->ia_ifa);
++
++	/*
++	 * A newly added address might affect the status
++	 * of other addresses, so we check and update it.
++	 * XXX: what if address duplication happens?
++	 */
++	pfxlist_onlink_check();
++
+  end:
+ 	return error;
+ }

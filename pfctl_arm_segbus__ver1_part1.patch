@@ -1,0 +1,69 @@
+Index: sbin/pfctl/pf_print_state.c
+===================================================================
+--- sbin/pfctl/pf_print_state.c	(revision 277773)
++++ sbin/pfctl/pf_print_state.c	(working copy)
+@@ -208,7 +208,7 @@ void
+ print_state(struct pfsync_state *s, int opts)
+ {
+ 	struct pfsync_state_peer *src, *dst;
+-	struct pfsync_state_key *sk, *nk;
++	struct pfsync_state_key sk, nk;
+ 	struct protoent *p;
+ 	int min, sec;
+ 
+@@ -215,17 +215,17 @@ print_state(struct pfsync_state *s, int opts)
+ 	if (s->direction == PF_OUT) {
+ 		src = &s->src;
+ 		dst = &s->dst;
+-		sk = &s->key[PF_SK_STACK];
+-		nk = &s->key[PF_SK_WIRE];
++		bcopy(&s->key[PF_SK_STACK], &sk, sizeof(sk));
++		bcopy(&s->key[PF_SK_WIRE], &nk, sizeof(nk));
+ 		if (s->proto == IPPROTO_ICMP || s->proto == IPPROTO_ICMPV6) 
+-			sk->port[0] = nk->port[0];
++			sk.port[0] = nk.port[0];
+ 	} else {
+ 		src = &s->dst;
+ 		dst = &s->src;
+-		sk = &s->key[PF_SK_WIRE];
+-		nk = &s->key[PF_SK_STACK];
++		bcopy(&s->key[PF_SK_WIRE], &sk, sizeof(sk));
++		bcopy(&s->key[PF_SK_STACK], &nk, sizeof(nk));
+ 		if (s->proto == IPPROTO_ICMP || s->proto == IPPROTO_ICMPV6) 
+-			sk->port[1] = nk->port[1];
++			sk.port[1] = nk.port[1];
+ 	}
+ 	printf("%s ", s->ifname);
+ 	if ((p = getprotobynumber(s->proto)) != NULL)
+@@ -233,11 +233,11 @@ print_state(struct pfsync_state *s, int opts)
+ 	else
+ 		printf("%u ", s->proto);
+ 
+-	print_host(&nk->addr[1], nk->port[1], s->af, opts);
+-	if (PF_ANEQ(&nk->addr[1], &sk->addr[1], s->af) ||
+-	    nk->port[1] != sk->port[1]) {
++	print_host(&nk.addr[1], nk.port[1], s->af, opts);
++	if (PF_ANEQ(&nk.addr[1], &sk.addr[1], s->af) ||
++	    nk.port[1] != sk.port[1]) {
+ 		printf(" (");
+-		print_host(&sk->addr[1], sk->port[1], s->af, opts);
++		print_host(&sk.addr[1], sk.port[1], s->af, opts);
+ 		printf(")");
+ 	}
+ 	if (s->direction == PF_OUT)
+@@ -244,11 +244,11 @@ print_state(struct pfsync_state *s, int opts)
+ 		printf(" -> ");
+ 	else
+ 		printf(" <- ");
+-	print_host(&nk->addr[0], nk->port[0], s->af, opts);
+-	if (PF_ANEQ(&nk->addr[0], &sk->addr[0], s->af) ||
+-	    nk->port[0] != sk->port[0]) {
++	print_host(&nk.addr[0], nk.port[0], s->af, opts);
++	if (PF_ANEQ(&nk.addr[0], &sk.addr[0], s->af) ||
++	    nk.port[0] != sk.port[0]) {
+ 		printf(" (");
+-		print_host(&sk->addr[0], sk->port[0], s->af, opts);
++		print_host(&sk.addr[0], sk.port[0], s->af, opts);
+ 		printf(")");
+ 	}
+ 
