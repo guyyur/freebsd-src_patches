@@ -1,6 +1,6 @@
 Index: sbin/pfctl/pfctl.h
 ===================================================================
---- sbin/pfctl/pfctl.h  (revision 277773M)
+--- sbin/pfctl/pfctl.h  (revision 280171M)
 +++ sbin/pfctl/pfctl.h  (working copy)
 @@ -115,11 +115,11 @@ void		 pfaltq_store(struct pf_altq *);
  struct pf_altq	*pfaltq_lookup(const char *);
@@ -21,7 +21,7 @@ Index: sbin/pfctl/pfctl.h
  int	 pfctl_add_trans(struct pfr_buffer *, int, const char *);
 Index: sbin/pfctl/pfctl_parser.h
 ===================================================================
---- sbin/pfctl/pfctl_parser.h  (revision 277773)
+--- sbin/pfctl/pfctl_parser.h  (revision 280171)
 +++ sbin/pfctl/pfctl_parser.h  (working copy)
 @@ -292,7 +292,7 @@ extern const struct pf_timeout pf_timeou
  
@@ -34,7 +34,7 @@ Index: sbin/pfctl/pfctl_parser.h
  struct node_host	*ifa_exists(const char *);
 Index: sbin/pfctl/pf_print_state.c
 ===================================================================
---- sbin/pfctl/pf_print_state.c (revision 277773M)
+--- sbin/pfctl/pf_print_state.c (revision 280171M)
 +++ sbin/pfctl/pf_print_state.c (working copy)
 @@ -50,10 +50,10 @@ __FBSDID("$FreeBSD: head/sbin/pfctl/pf_p
  #include "pfctl_parser.h"

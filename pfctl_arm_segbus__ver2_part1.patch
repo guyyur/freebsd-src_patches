@@ -1,6 +1,6 @@
 Index: sys/net/pfvar.h
 ===================================================================
---- sys/net/pfvar.h	(revision 277773)
+--- sys/net/pfvar.h	(revision 280171)
 +++ sys/net/pfvar.h	(working copy)
 @@ -748,8 +748,8 @@ struct pf_state {
  };
@@ -29,16 +29,17 @@ Index: sys/net/pfvar.h
  extern pfsync_insert_state_t	*pfsync_insert_state_ptr;
  extern pfsync_update_state_t	*pfsync_update_state_ptr;
  extern pfsync_delete_state_t	*pfsync_delete_state_ptr;
-@@ -818,8 +816,6 @@ extern pfsync_delete_state_t	*pfsync_delete_state_
+@@ -818,9 +816,6 @@ extern pfsync_delete_state_t	*pfsync_delete_state_
  extern pfsync_clear_states_t	*pfsync_clear_states_ptr;
  extern pfsync_defer_t		*pfsync_defer_ptr;
  
 -void			pfsync_state_export(struct pfsync_state *,
 -			    struct pf_state *);
- 
+-
  /* pflog */
  struct pf_ruleset;
-@@ -836,7 +832,6 @@ extern pflog_packet_t		*pflog_packet_ptr;
+ struct pf_pdesc;
+@@ -836,7 +831,6 @@ extern pflog_packet_t		*pflog_packet_ptr;
  #define	PFSYNC_FLAG_NATSRCNODE	0x08
  
  /* for copies to/from network byte order */
@@ -46,7 +47,7 @@ Index: sys/net/pfvar.h
  #define pf_state_peer_hton(s,d) do {		\
  	(d)->seqlo = htonl((s)->seqlo);		\
  	(d)->seqhi = htonl((s)->seqhi);		\
-@@ -1231,8 +1226,53 @@ struct pfioc_natlook {
+@@ -1231,8 +1225,53 @@ struct pfioc_natlook {
  	u_int8_t	 direction;
  };
  
@@ -101,7 +102,7 @@ Index: sys/net/pfvar.h
  };
  
  struct pfioc_src_node_kill {
-@@ -1257,7 +1297,7 @@ struct pfioc_states {
+@@ -1257,7 +1296,7 @@ struct pfioc_states {
  	int	ps_len;
  	union {
  		caddr_t			 psu_buf;
@@ -110,7 +111,7 @@ Index: sys/net/pfvar.h
  	} ps_u;
  #define ps_buf		ps_u.psu_buf
  #define ps_states	ps_u.psu_states
-@@ -1360,7 +1400,42 @@ struct pfioc_iface {
+@@ -1360,7 +1399,42 @@ struct pfioc_iface {
  	int	 pfiio_flags;
  };
  
@@ -128,7 +129,7 @@ Index: sys/net/pfvar.h
 +		    (s)->scrub->pfss_flags & PFSS_TIMESTAMP;		\
 +		(d)->scrub.pfss_ttl = (s)->scrub->pfss_ttl;		\
 +		(d)->scrub.pfss_ts_mod = (s)->scrub->pfss_ts_mod;	\
-+		(d)->scrub.scrub_flag = PFIOC_SCRUB_FLAG_VALID;	\
++		(d)->scrub.scrub_flag = PFIOC_SCRUB_FLAG_VALID;		\
 +	}								\
 +} while (0)
  
@@ -140,7 +141,7 @@ Index: sys/net/pfvar.h
 +	(d)->mss = (s)->mss;				\
 +	(d)->state = (s)->state;			\
 +	(d)->wscale = (s)->wscale;			\
-+	if ((s)->scrub.scrub_flag == PFIOC_SCRUB_FLAG_VALID && 	\
++	if ((s)->scrub.scrub_flag == PFIOC_SCRUB_FLAG_VALID && 		\
 +	    (d)->scrub != NULL) {					\
 +		(d)->scrub->pfss_flags =				\
 +		    (s)->scrub.pfss_flags & PFSS_TIMESTAMP;		\
@@ -155,7 +156,7 @@ Index: sys/net/pfvar.h
   */
 Index: sys/net/if_pfsync.h
 ===================================================================
---- sys/net/if_pfsync.h	(revision 277773)
+--- sys/net/if_pfsync.h	(revision 280171)
 +++ sys/net/if_pfsync.h	(working copy)
 @@ -256,7 +256,6 @@ struct pfsyncreq {
  #define	PFSYNC_S_DEFER	0xfe
@@ -167,7 +168,7 @@ Index: sys/net/if_pfsync.h
  
 Index: sys/netpfil/pf/pf_ioctl.c
 ===================================================================
---- sys/netpfil/pf/pf_ioctl.c	(revision 277773)
+--- sys/netpfil/pf/pf_ioctl.c	(revision 280171)
 +++ sys/netpfil/pf/pf_ioctl.c	(working copy)
 @@ -158,6 +158,11 @@ static int		 pf_clear_tables(void);
  static void		 pf_clear_srcnodes(struct pf_src_node *);
@@ -307,7 +308,7 @@ Index: sys/netpfil/pf/pf_ioctl.c
  
  	sp->direction = st->direction;
  	sp->log = st->log;
-@@ -3302,27 +3315,171 @@ fail:
+@@ -3302,29 +3315,174 @@ fail:
  
  	sp->id = st->id;
  	sp->creatorid = st->creatorid;
@@ -343,7 +344,8 @@ Index: sys/netpfil/pf/pf_ioctl.c
 +	sp->packets[1] = st->packets[1];
 +	sp->bytes[0] = st->bytes[0];
 +	sp->bytes[1] = st->bytes[1];
-+}
+ 
+ }
  
 +static int
 +pfioc_state_import(struct pfioc_state *sp)
@@ -488,22 +490,24 @@ Index: sys/netpfil/pf/pf_ioctl.c
 +		uma_zfree(V_pf_state_z, st);
 +	}
 +	return (error);
- }
- 
++}
++
  static void
+ pf_tbladdr_copyout(struct pf_addr_wrap *aw)
+ {
 Index: sys/netpfil/pf/if_pfsync.c
 ===================================================================
---- sys/netpfil/pf/if_pfsync.c	(revision 277773)
+--- sys/netpfil/pf/if_pfsync.c	(revision 280171)
 +++ sys/netpfil/pf/if_pfsync.c	(working copy)
-@@ -398,6 +398,67 @@ pfsync_alloc_scrub_memory(struct pfsync_state_peer
+@@ -397,7 +397,67 @@ pfsync_alloc_scrub_memory(struct pfsync_state_peer
+ 	return (0);
  }
- 
  
 +static void
 +pfsync_state_export(struct pfsync_state *sp, struct pf_state *st)
 +{
 +	bzero(sp, sizeof(struct pfsync_state));
-+
+ 
 +	/* copy from state key */
 +	sp->key[PF_SK_WIRE].addr[0] = st->key[PF_SK_WIRE]->addr[0];
 +	sp->key[PF_SK_WIRE].addr[1] = st->key[PF_SK_WIRE]->addr[1];
@@ -563,7 +567,7 @@ Index: sys/netpfil/pf/if_pfsync.c
  static int
  pfsync_state_import(struct pfsync_state *sp, u_int8_t flags)
  {
-@@ -425,17 +486,15 @@ pfsync_state_import(struct pfsync_state *sp, u_int
+@@ -425,17 +485,15 @@ pfsync_state_import(struct pfsync_state *sp, u_int
  		if (V_pf_status.debug >= PF_DEBUG_MISC)
  			printf("%s: unknown interface: %s\n", __func__,
  			    sp->ifname);
@@ -574,8 +578,9 @@ Index: sys/netpfil/pf/if_pfsync.c
  
  	/*
 -	 * If the ruleset checksums match or the state is coming from the ioctl,
-+	 * If the ruleset checksums match,
- 	 * it's safe to associate the state with the rule of that number.
+-	 * it's safe to associate the state with the rule of that number.
++	 * If the ruleset checksums match, it's safe to associate the
++	 * state with the rule of that number.
  	 */
  	if (sp->rule != htonl(-1) && sp->anchor == htonl(-1) &&
 -	    (flags & (PFSYNC_SI_IOCTL | PFSYNC_SI_CKSUM)) && ntohl(sp->rule) <
@@ -583,7 +588,7 @@ Index: sys/netpfil/pf/if_pfsync.c
  	    pf_main_ruleset.rules[PF_RULESET_FILTER].active.rcount)
  		r = pf_main_ruleset.rules[
  		    PF_RULESET_FILTER].active.ptr_array[ntohl(sp->rule)];
-@@ -446,9 +505,6 @@ pfsync_state_import(struct pfsync_state *sp, u_int
+@@ -446,9 +504,6 @@ pfsync_state_import(struct pfsync_state *sp, u_int
  	    counter_u64_fetch(r->states_cur) >= r->max_states))
  		goto cleanup;
  
@@ -593,7 +598,7 @@ Index: sys/netpfil/pf/if_pfsync.c
  	if ((st = uma_zalloc(V_pf_state_z, M_NOWAIT | M_ZERO)) == NULL)
  		goto cleanup;
  
-@@ -526,11 +582,8 @@ pfsync_state_import(struct pfsync_state *sp, u_int
+@@ -526,11 +581,8 @@ pfsync_state_import(struct pfsync_state *sp, u_int
  	st->rt_kif = NULL;
  
  	st->pfsync_time = time_uptime;
@@ -606,7 +611,7 @@ Index: sys/netpfil/pf/if_pfsync.c
  	if ((error = pf_state_insert(kif, skw, sks, st)) != 0)
  		goto cleanup_state;
  
-@@ -538,12 +591,10 @@ pfsync_state_import(struct pfsync_state *sp, u_int
+@@ -538,12 +590,10 @@ pfsync_state_import(struct pfsync_state *sp, u_int
  	counter_u64_add(r->states_cur, 1);
  	counter_u64_add(r->states_tot, 1);
  
@@ -623,7 +628,7 @@ Index: sys/netpfil/pf/if_pfsync.c
  	}
  	st->state_flags &= ~PFSTATE_ACK;
  	PF_STATE_UNLOCK(st);
-@@ -2292,7 +2343,6 @@ pfsync_pointers_init()
+@@ -2292,7 +2342,6 @@ pfsync_pointers_init()
  {
  
  	PF_RULES_WLOCK();
@@ -631,7 +636,7 @@ Index: sys/netpfil/pf/if_pfsync.c
  	pfsync_insert_state_ptr = pfsync_insert_state;
  	pfsync_update_state_ptr = pfsync_update_state;
  	pfsync_delete_state_ptr = pfsync_delete_state;
-@@ -2306,7 +2356,6 @@ pfsync_pointers_uninit()
+@@ -2306,7 +2355,6 @@ pfsync_pointers_uninit()
  {
  
  	PF_RULES_WLOCK();
@@ -641,7 +646,7 @@ Index: sys/netpfil/pf/if_pfsync.c
  	pfsync_delete_state_ptr = NULL;
 Index: sbin/pfctl/pf_print_state.c
 ===================================================================
---- sbin/pfctl/pf_print_state.c	(revision 277773)
+--- sbin/pfctl/pf_print_state.c	(revision 280171)
 +++ sbin/pfctl/pf_print_state.c	(working copy)
 @@ -194,21 +194,20 @@ print_host(struct pf_addr *addr, u_int16_t port, s
  }
@@ -726,7 +731,7 @@ Index: sbin/pfctl/pf_print_state.c
  }
 Index: sbin/pfctl/pfctl.c
 ===================================================================
---- sbin/pfctl/pfctl.c	(revision 277773)
+--- sbin/pfctl/pfctl.c	(revision 280171)
 +++ sbin/pfctl/pfctl.c	(working copy)
 @@ -1051,7 +1051,7 @@ int
  pfctl_show_states(int dev, const char *iface, int opts)
@@ -739,7 +744,7 @@ Index: sbin/pfctl/pfctl.c
  	int i, dotitle = (opts & PF_OPT_SHOWALL);
 Index: sbin/pfctl/pfctl.h
 ===================================================================
---- sbin/pfctl/pfctl.h	(revision 277773)
+--- sbin/pfctl/pfctl.h	(revision 280171)
 +++ sbin/pfctl/pfctl.h	(working copy)
 @@ -117,8 +117,8 @@ char		*rate2str(double);
  
@@ -754,7 +759,7 @@ Index: sbin/pfctl/pfctl.h
  int	 pfctl_cmdline_symset(char *);
 Index: share/man/man4/pf.4
 ===================================================================
---- share/man/man4/pf.4	(revision 277773)
+--- share/man/man4/pf.4	(revision 280171)
 +++ share/man/man4/pf.4	(working copy)
 @@ -323,7 +323,28 @@ if another process is concurrently updating a rule
  Add a state entry.
