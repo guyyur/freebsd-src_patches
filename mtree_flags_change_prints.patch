@@ -1,0 +1,37 @@
+Index: contrib/mtree/compare.c
+===================================================================
+--- contrib/mtree/compare.c	(revision 281537)
++++ contrib/mtree/compare.c	(working copy)
+@@ -102,12 +102,17 @@ do {									\
+ 		}							\
+ 		if (lchflags(p->fts_accpath, flags)) {			\
+ 			label++;					\
+-			printf(", not modified: %s)\n",			\
+-			    strerror(errno));				\
++			printf(", not modified: %s%s\n",		\
++			    strerror(errno),				\
++			    flavor == F_FREEBSD9 && uflag ? "" : ")");	\
+ 		} else {						\
+-			sf = flags_to_string(flags, "none");		\
+-			printf(", modified to \"%s\")\n", sf);		\
+-			free(sf);					\
++			if (flavor == F_FREEBSD9 && uflag)		\
++				printf(" modified\n");			\
++			else {						\
++				sf = flags_to_string(flags, "none");	\
++				printf(", modified to \"%s\")\n", sf);	\
++				free(sf);				\
++			}						\
+ 		}							\
+ 	}
+ 
+@@ -389,6 +394,9 @@ typeerr:		LABEL;
+ 				CLEARFLAGS(0, SP_FLGS);
+ 			else
+ 				SETFLAGS(0, (~SP_FLGS & CH_MASK));
++			if (s->st_flags != p->fts_statp->st_flags &&
++			    flags == p->fts_statp->st_flags)
++				printf("%s\n", flavor == F_FREEBSD9 ? "" : ")");
+ 		} else
+ 			printf("%s\n", flavor == F_FREEBSD9 ? "" : ")");
+ 		tab = "\t";
