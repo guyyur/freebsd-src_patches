@@ -1,0 +1,35 @@
+Index: etc/Makefile
+===================================================================
+--- etc/Makefile	(revision 281537)
++++ etc/Makefile	(working copy)
+@@ -366,9 +366,9 @@ distrib-dirs: ${MTREES:N/*}
+ 		d=${DESTDIR}$$1; \
+ 		shift; \
+ 		test -d $$d || mkdir -p $$d; \
+-		${ECHO} ${MTREE_CMD} -deU ${MTREE_FOLLOWS_SYMLINKS} \
++		${ECHO} ${MTREE_CMD} -deiU ${MTREE_FOLLOWS_SYMLINKS} \
+ 		    -f $$m -p $$d; \
+-		${MTREE_CMD} -deU ${MTREE_FOLLOWS_SYMLINKS} -f $$m -p $$d; \
++		${MTREE_CMD} -deiU ${MTREE_FOLLOWS_SYMLINKS} -f $$m -p $$d; \
+ 	done; true
+ .if defined(NO_ROOT)
+ 	@set ${MTREES}; \
+Index: etc/rc.d/var
+===================================================================
+--- etc/rc.d/var	(revision 281537)
++++ etc/rc.d/var	(working copy)
+@@ -41,12 +41,12 @@ load_rc_config $name
+ 
+ populate_var()
+ {
+-	/usr/sbin/mtree -deU -f /etc/mtree/BSD.var.dist -p /var > /dev/null
++	/usr/sbin/mtree -deiU -f /etc/mtree/BSD.var.dist -p /var > /dev/null
+ 	case ${sendmail_enable} in
+ 	[Nn][Oo][Nn][Ee])
+ 		;;
+ 	*)
+-		/usr/sbin/mtree -deU -f /etc/mtree/BSD.sendmail.dist -p / > /dev/null
++		/usr/sbin/mtree -deiU -f /etc/mtree/BSD.sendmail.dist -p / > /dev/null
+ 		;;
+ 	esac
+ }
