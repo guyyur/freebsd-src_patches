@@ -1,6 +1,6 @@
 Index: sbin/pfctl/pfctl.h
 ===================================================================
---- sbin/pfctl/pfctl.h  (revision 280171M)
+--- sbin/pfctl/pfctl.h  (revision 286782M)
 +++ sbin/pfctl/pfctl.h  (working copy)
 @@ -115,11 +115,11 @@ void		 pfaltq_store(struct pf_altq *);
  struct pf_altq	*pfaltq_lookup(const char *);
@@ -21,9 +21,9 @@ Index: sbin/pfctl/pfctl.h
  int	 pfctl_add_trans(struct pfr_buffer *, int, const char *);
 Index: sbin/pfctl/pfctl_parser.h
 ===================================================================
---- sbin/pfctl/pfctl_parser.h  (revision 280171)
+--- sbin/pfctl/pfctl_parser.h  (revision 286782)
 +++ sbin/pfctl/pfctl_parser.h  (working copy)
-@@ -292,7 +292,7 @@ extern const struct pf_timeout pf_timeou
+@@ -307,7 +307,7 @@ extern const struct pf_timeout pf_timeou
  
  void			 set_ipmask(struct node_host *, u_int8_t);
  int			 check_netmask(struct node_host *, sa_family_t);
@@ -34,7 +34,7 @@ Index: sbin/pfctl/pfctl_parser.h
  struct node_host	*ifa_exists(const char *);
 Index: sbin/pfctl/pf_print_state.c
 ===================================================================
---- sbin/pfctl/pf_print_state.c (revision 280171M)
+--- sbin/pfctl/pf_print_state.c (revision 286782M)
 +++ sbin/pfctl/pf_print_state.c (working copy)
 @@ -50,10 +50,10 @@ __FBSDID("$FreeBSD: head/sbin/pfctl/pf_p
  #include "pfctl_parser.h"
@@ -76,7 +76,7 @@ Index: sbin/pfctl/pf_print_state.c
  {
  	if (p->seqdiff)
  		printf("[%u + %u](+%u)", p->seqlo, p->seqhi - p->seqlo,
-@@ -204,12 +204,13 @@ print_seq(struct pfioc_state_peer *p)
+@@ -204,27 +204,34 @@ print_seq(struct pfioc_state_peer *p)
  }
  
  void
@@ -90,67 +90,60 @@ Index: sbin/pfctl/pf_print_state.c
 +	const struct pfioc_state_key *sk, *nk;
 +	const struct protoent *p;
  	int min, sec;
-+	u_int16_t sport[2], nport[2];
++	u_int16_t sport[2];
  
  	if (s->direction == PF_OUT) {
  		src = &s->src;
-@@ -217,14 +218,24 @@ print_state(struct pfioc_state *s, int o
+ 		dst = &s->dst;
  		sk = &s->key[PF_SK_STACK];
  		nk = &s->key[PF_SK_WIRE];
- 		if (s->proto == IPPROTO_ICMP || s->proto == IPPROTO_ICMPV6) 
+-		if (s->proto == IPPROTO_ICMP || s->proto == IPPROTO_ICMPV6) 
 -			sk->port[0] = nk->port[0];
++		if (s->proto == IPPROTO_ICMP || s->proto == IPPROTO_ICMPV6)
 +			sport[0] = nk->port[0];
 +		else
 +			sport[0] = sk->port[0];
 +		sport[1] = sk->port[1];
-+		nport[0] = nk->port[0];
-+		nport[1] = nk->port[1];
  	} else {
  		src = &s->dst;
  		dst = &s->src;
  		sk = &s->key[PF_SK_WIRE];
  		nk = &s->key[PF_SK_STACK];
-+		sport[0] = sk->port[0];
- 		if (s->proto == IPPROTO_ICMP || s->proto == IPPROTO_ICMPV6) 
+-		if (s->proto == IPPROTO_ICMP || s->proto == IPPROTO_ICMPV6) 
 -			sk->port[1] = nk->port[1];
++		sport[0] = sk->port[0];
++		if (s->proto == IPPROTO_ICMP || s->proto == IPPROTO_ICMPV6)
 +			sport[1] = nk->port[1];
 +		else
 +			sport[1] = sk->port[1];
-+		nport[0] = nk->port[0];
-+		nport[1] = nk->port[1];
  	}
  	printf("%s ", s->ifname);
  	if ((p = getprotobynumber(s->proto)) != NULL)
-@@ -232,22 +243,22 @@ print_state(struct pfioc_state *s, int o
- 	else
- 		printf("%u ", s->proto);
+@@ -234,9 +241,9 @@ print_state(struct pfioc_state *s, int o
  
--	print_host(&nk->addr[1], nk->port[1], s->af, opts);
-+	print_host(&nk->addr[1], nport[1], s->af, opts);
+ 	print_host(&nk->addr[1], nk->port[1], s->af, opts);
  	if (PF_ANEQ(&nk->addr[1], &sk->addr[1], s->af) ||
 -	    nk->port[1] != sk->port[1]) {
-+	    nport[1] != sport[1]) {
++	    nk->port[1] != sport[1]) {
  		printf(" (");
 -		print_host(&sk->addr[1], sk->port[1], s->af, opts);
 +		print_host(&sk->addr[1], sport[1], s->af, opts);
  		printf(")");
  	}
  	if (s->direction == PF_OUT)
- 		printf(" -> ");
- 	else
+@@ -245,9 +252,9 @@ print_state(struct pfioc_state *s, int o
  		printf(" <- ");
--	print_host(&nk->addr[0], nk->port[0], s->af, opts);
-+	print_host(&nk->addr[0], nport[0], s->af, opts);
+ 	print_host(&nk->addr[0], nk->port[0], s->af, opts);
  	if (PF_ANEQ(&nk->addr[0], &sk->addr[0], s->af) ||
 -	    nk->port[0] != sk->port[0]) {
-+	    nport[0] != sport[0]) {
++	    nk->port[0] != sport[0]) {
  		printf(" (");
 -		print_host(&sk->addr[0], sk->port[0], s->af, opts);
 +		print_host(&sk->addr[0], sport[0], s->af, opts);
  		printf(")");
  	}
  
-@@ -337,7 +348,7 @@ print_state(struct pfioc_state *s, int o
+@@ -337,7 +344,7 @@ print_state(struct pfioc_state *s, int o
  }
  
  int
