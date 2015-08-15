@@ -1,8 +1,8 @@
 Index: usr.sbin/rtadvd/if.c
 ===================================================================
---- usr.sbin/rtadvd/if.c	(revision 277773)
+--- usr.sbin/rtadvd/if.c	(revision 286796)
 +++ usr.sbin/rtadvd/if.c	(working copy)
-@@ -404,6 +404,7 @@ update_ifinfo_nd_flags(struct ifinfo *ifi)
+@@ -403,6 +403,7 @@ update_ifinfo_nd_flags(struct ifinfo *ifi)
  	return (0);
  }
  
@@ -10,7 +10,7 @@ Index: usr.sbin/rtadvd/if.c
  struct ifinfo *
  update_ifinfo(struct ifilist_head_t *ifi_head, int ifindex)
  {
-@@ -415,27 +416,45 @@ update_ifinfo(struct ifilist_head_t *ifi_head, int
+@@ -414,27 +415,45 @@ update_ifinfo(struct ifilist_head_t *ifi_head, int
  	size_t len;
  	char *lim;
  	int mib[] = { CTL_NET, PF_ROUTE, 0, AF_INET6, NET_RT_IFLIST, 0 };

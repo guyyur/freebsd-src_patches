@@ -1,8 +1,8 @@
 Index: sys/netinet6/in6.c
 ===================================================================
---- sys/netinet6/in6.c	(revision 277773)
+--- sys/netinet6/in6.c	(revision 286796)
 +++ sys/netinet6/in6.c	(working copy)
-@@ -657,53 +657,22 @@ in6_control(struct socket *so, u_long cmd, caddr_t
+@@ -659,53 +659,22 @@ in6_control(struct socket *so, u_long cmd, caddr_t
  		pr0.ndpr_vltime = ifra->ifra_lifetime.ia6t_vltime;
  		pr0.ndpr_pltime = ifra->ifra_lifetime.ia6t_pltime;
  
@@ -71,9 +71,9 @@ Index: sys/netinet6/in6.c
  			break;
 Index: sys/netinet6/nd6.h
 ===================================================================
---- sys/netinet6/nd6.h	(revision 277773)
+--- sys/netinet6/nd6.h	(revision 286796)
 +++ sys/netinet6/nd6.h	(working copy)
-@@ -439,6 +439,8 @@ void defrouter_reset(void);
+@@ -451,6 +451,8 @@ void defrouter_reset(void);
  void defrouter_select(void);
  void defrtrlist_del(struct nd_defrouter *);
  void prelist_remove(struct nd_prefix *);
@@ -84,7 +84,7 @@ Index: sys/netinet6/nd6.h
  void pfxlist_onlink_check(void);
 Index: sys/netinet6/nd6_rtr.c
 ===================================================================
---- sys/netinet6/nd6_rtr.c	(revision 277773)
+--- sys/netinet6/nd6_rtr.c	(revision 286796)
 +++ sys/netinet6/nd6_rtr.c	(working copy)
 @@ -69,8 +69,6 @@ __FBSDID("$FreeBSD$");
  
@@ -95,7 +95,7 @@ Index: sys/netinet6/nd6_rtr.c
  static struct in6_ifaddr *in6_ifadd(struct nd_prefixctl *, int);
  static struct nd_pfxrouter *pfxrtr_lookup(struct nd_prefix *,
  	struct nd_defrouter *);
-@@ -357,7 +355,7 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len
+@@ -365,7 +363,7 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len
  			pr.ndpr_plen = pi->nd_opt_pi_prefix_len;
  			pr.ndpr_vltime = ntohl(pi->nd_opt_pi_valid_time);
  			pr.ndpr_pltime = ntohl(pi->nd_opt_pi_preferred_time);
@@ -104,7 +104,7 @@ Index: sys/netinet6/nd6_rtr.c
  		}
  	}
  
-@@ -951,11 +949,12 @@ prelist_remove(struct nd_prefix *pr)
+@@ -959,11 +957,12 @@ prelist_remove(struct nd_prefix *pr)
   * dr - may be NULL
   */
  
@@ -120,7 +120,7 @@ Index: sys/netinet6/nd6_rtr.c
  	struct ifaddr *ifa;
  	struct ifnet *ifp = new->ndpr_ifp;
  	struct nd_prefix *pr;
-@@ -1035,6 +1034,8 @@ prelist_update(struct nd_prefixctl *new, struct nd
+@@ -1043,6 +1042,8 @@ prelist_update(struct nd_prefixctl *new, struct nd
  			    ip6_sprintf(ip6buf, &new->ndpr_prefix.sin6_addr),
  			    new->ndpr_plen, if_name(new->ndpr_ifp),
  			    error, newpr));
@@ -129,7 +129,7 @@ Index: sys/netinet6/nd6_rtr.c
  			goto end; /* we should just give up in this case. */
  		}
  
-@@ -1054,6 +1055,16 @@ prelist_update(struct nd_prefixctl *new, struct nd
+@@ -1062,6 +1063,16 @@ prelist_update(struct nd_prefixctl *new, struct nd
  		pr = newpr;
  	}
  
@@ -139,14 +139,14 @@ Index: sys/netinet6/nd6_rtr.c
 +	/* relate the address to the prefix */
 +	if (ia6 && ia6->ia6_ndpr == NULL) {
 +		/* note that we should use pr (not new) for reference. */
-+		ia6->ia6_ndpr = pr;
 +		pr->ndpr_refcnt++;
++		ia6->ia6_ndpr = pr;
 +	}
 +
  	/*
  	 * Address autoconfiguration based on Section 5.5.3 of RFC 2462.
  	 * Note that pr must be non NULL at this point.
-@@ -1074,214 +1085,243 @@ prelist_update(struct nd_prefixctl *new, struct nd
+@@ -1082,214 +1093,243 @@ prelist_update(struct nd_prefixctl *new, struct nd
  		goto end;
  	}
  
