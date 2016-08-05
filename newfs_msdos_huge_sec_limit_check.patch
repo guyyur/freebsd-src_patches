@@ -1,8 +1,8 @@
-Index: sbin/newfs_msdos/newfs_msdos.c
+Index: sbin/newfs_msdos/mkfs_msdos.c
 ===================================================================
---- sbin/newfs_msdos/newfs_msdos.c	(revision 277773)
-+++ sbin/newfs_msdos/newfs_msdos.c	(working copy)
-@@ -603,7 +603,7 @@ main(int argc, char *argv[])
+--- sbin/newfs_msdos/mkfs_msdos.c	(revision 303766)
++++ sbin/newfs_msdos/mkfs_msdos.c	(working copy)
+@@ -563,7 +563,7 @@ mkfs_msdos(const char *fname, const char *dtype, c
  	bpb.bpbMedia = !bpb.bpbHiddenSecs ? 0xf0 : 0xf8;
      if (fat == 32)
  	bpb.bpbRootClust = RESFTE;

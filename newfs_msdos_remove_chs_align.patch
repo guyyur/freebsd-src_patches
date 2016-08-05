@@ -1,14 +1,14 @@
-Index: sbin/newfs_msdos/newfs_msdos.c
+Index: sbin/newfs_msdos/mkfs_msdos.c
 ===================================================================
---- sbin/newfs_msdos/newfs_msdos.c	(revision 277773)
-+++ sbin/newfs_msdos/newfs_msdos.c	(working copy)
-@@ -402,15 +402,8 @@ main(int argc, char *argv[])
-     if (oflag)
- 	bpb.bpbHiddenSecs = opt_o;
-     if (!(opt_f || (opt_h && opt_u && opt_S && opt_s && oflag))) {
+--- sbin/newfs_msdos/mkfs_msdos.c	(revision 303766)
++++ sbin/newfs_msdos/mkfs_msdos.c	(working copy)
+@@ -313,15 +313,8 @@ mkfs_msdos(const char *fname, const char *dtype, c
+ 	bpb.bpbHiddenSecs = o.hidden_sectors;
+     if (!(o.floppy || (o.drive_heads && o.sectors_per_track &&
+ 	o.bytes_per_sector && o.size && o.hidden_sectors_set))) {
 -	off_t delta;
- 	getdiskinfo(fd, fname, dtype, oflag, &bpb);
- 	bpb.bpbHugeSectors -= (opt_ofs / bpb.bpbBytesPerSec);
+ 	getdiskinfo(fd, fname, dtype, o.hidden_sectors_set, &bpb);
+ 	bpb.bpbHugeSectors -= (o.offset / bpb.bpbBytesPerSec);
 -	delta = bpb.bpbHugeSectors % bpb.bpbSecPerTrack;
 -	if (delta != 0) {
 -	    warnx("trim %d sectors to adjust to a multiple of %d",
