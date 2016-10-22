@@ -1,6 +1,6 @@
 Index: sys/net/route.c
 ===================================================================
---- sys/net/route.c	(revision 303766)
+--- sys/net/route.c	(revision 307767)
 +++ sys/net/route.c	(working copy)
 @@ -444,6 +444,7 @@ rtalloc1_fib(struct sockaddr *dst, int report, u_l
  	struct rtentry *newrt;
@@ -46,7 +46,7 @@ Index: sys/net/route.c
  		if (rt == NULL)
  			return (NULL);
  		/*
-@@ -1840,6 +1848,8 @@ rtrequest1_fib_change(struct rib_head *rnh, struct
+@@ -1840,10 +1848,14 @@ rtrequest1_fib_change(struct rib_head *rnh, struct
  	    (info->rti_info[RTAX_IFA] != NULL &&
  	     !sa_equal(info->rti_info[RTAX_IFA], rt->rt_ifa->ifa_addr))) {
  
@@ -55,18 +55,15 @@ Index: sys/net/route.c
  		error = rt_getifa_fib(info, fibnum);
  		if (info->rti_ifa != NULL)
  			free_ifa = 1;
-@@ -1846,6 +1856,8 @@ rtrequest1_fib_change(struct rib_head *rnh, struct
  
++		info->rti_flags &= ~RTF_RNH_LOCKED;
++
  		if (error != 0)
  			goto bad;
-+
-+		info->rti_flags &= ~RTF_RNH_LOCKED;
  	}
- 
- 	/* Check if outgoing interface has changed */
 Index: sys/net/route.h
 ===================================================================
---- sys/net/route.h	(revision 303766)
+--- sys/net/route.h	(revision 307767)
 +++ sys/net/route.h	(working copy)
 @@ -189,7 +189,7 @@ struct rtentry {
  					/* 0x8000000 and up unassigned */
