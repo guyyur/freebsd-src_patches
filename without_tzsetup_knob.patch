@@ -1,0 +1,137 @@
+Index: Makefile.inc1
+===================================================================
+--- Makefile.inc1	(revision 307767)
++++ Makefile.inc1	(working copy)
+@@ -909,13 +909,17 @@ __installcheck_UGID: .PHONY
+ # Required install tools to be saved in a scratch dir for safety.
+ #
+ .if ${MK_ZONEINFO} != "no"
+-_zoneinfo=	zic tzsetup
++_zoneinfo=	zic
++.if ${MK_TZSETUP} != "no"
++_tzsetup=	tzsetup
+ .endif
++.endif
+ 
+ ITOOLS=	[ awk cap_mkdb cat chflags chmod chown cmp cp \
+ 	date echo egrep find grep id install ${_install-info} \
+ 	ln make mkdir mtree mv pwd_mkdb \
+-	rm sed services_mkdb sh strip sysctl test true uname wc ${_zoneinfo} \
++	rm sed services_mkdb sh strip sysctl test true uname wc \
++	${_zoneinfo} ${_tzsetup} \
+ 	${LOCAL_ITOOLS}
+ 
+ # Needed for share/man
+Index: share/mk/src.opts.mk
+===================================================================
+--- share/mk/src.opts.mk	(revision 307767)
++++ share/mk/src.opts.mk	(working copy)
+@@ -169,6 +169,7 @@ __DEFAULT_YES_OPTIONS = \
+     TEXTPROC \
+     TFTP \
+     TIMED \
++    TZSETUP \
+     UNBOUND \
+     USB \
+     UTMPX \
+@@ -340,6 +341,7 @@ MK_TESTS:=	no
+ 
+ .if ${MK_DIALOG} == "no"
+ MK_BSDINSTALL:=	no
++MK_TZSETUP:=	no
+ .endif
+ 
+ .if ${MK_MAIL} == "no"
+Index: tools/build/mk/OptionalObsoleteFiles.inc
+===================================================================
+--- tools/build/mk/OptionalObsoleteFiles.inc	(revision 307767)
++++ tools/build/mk/OptionalObsoleteFiles.inc	(working copy)
+@@ -1348,12 +1348,10 @@ OLD_FILES+=usr/lib/libdpv.so
+ OLD_FILES+=usr/lib/libdpv.so.1
+ OLD_FILES+=usr/lib/libdpv_p.a
+ OLD_FILES+=usr/sbin/bsdconfig
+-OLD_FILES+=usr/sbin/tzsetup
+ OLD_FILES+=usr/share/man/man1/dialog.1.gz
+ OLD_FILES+=usr/share/man/man1/dpv.1.gz
+ OLD_FILES+=usr/share/man/man3/dialog.3.gz
+ OLD_FILES+=usr/share/man/man3/dpv.3.gz
+-OLD_FILES+=usr/share/man/man8/tzsetup.8.gz
+ OLD_FILES+=usr/share/man/man8/bsdconfig.8.gz
+ .endif
+ 
+@@ -8358,6 +8356,11 @@ OLD_FILES+=usr/tests/usr.bin/yacc/yacc_tests
+ OLD_DIRS+=usr/tests/usr.bin/yacc
+ .endif
+ 
++.if ${MK_TZSETUP} == no
++OLD_FILES+=usr/sbin/tzsetup
++OLD_FILES+=usr/share/man/man8/tzsetup.8.gz
++.endif
++
+ .if ${MK_UNBOUND} == no
+ OLD_FILES+=etc/rc.d/local_unbound
+ OLD_FILES+=etc/unbound
+Index: tools/build/options/WITHOUT_TZSETUP
+===================================================================
+--- tools/build/options/WITHOUT_TZSETUP	(nonexistent)
++++ tools/build/options/WITHOUT_TZSETUP	(working copy)
+@@ -0,0 +1,2 @@
++.\" $FreeBSD$
++Set to not build tzsetup(8).
+
+Property changes on: tools/build/options/WITHOUT_TZSETUP
+___________________________________________________________________
+Added: svn:eol-style
+## -0,0 +1 ##
++native
+\ No newline at end of property
+Added: svn:keywords
+## -0,0 +1 ##
++FreeBSD=%H
+\ No newline at end of property
+Added: svn:mime-type
+## -0,0 +1 ##
++text/plain
+\ No newline at end of property
+Index: usr.sbin/Makefile
+===================================================================
+--- usr.sbin/Makefile	(revision 307767)
++++ usr.sbin/Makefile	(working copy)
+@@ -121,7 +121,7 @@ SUBDIR.${MK_BOOTPARAMD}+=	bootparamd
+ SUBDIR.${MK_BSDINSTALL}+=	bsdinstall
+ SUBDIR.${MK_BSNMP}+=	bsnmpd
+ SUBDIR.${MK_CTM}+=	ctm
+-SUBDIR.${MK_DIALOG}+=	tzsetup
++SUBDIR.${MK_TZSETUP}+=	tzsetup
+ SUBDIR.${MK_DIALOG}+=	bsdconfig
+ SUBDIR.${MK_EFI}+=	efivar
+ SUBDIR.${MK_FLOPPY}+=	fdcontrol
+Index: share/zoneinfo/Makefile
+===================================================================
+--- share/zoneinfo/Makefile	(revision 307767)
++++ share/zoneinfo/Makefile	(working copy)
+@@ -1,5 +1,7 @@
+ # $FreeBSD$
+ 
++.include <src.opts.mk>
++
+ #
+ # HOW TO UPDATE THE ZONEINFO DATA
+ #
+@@ -94,6 +96,7 @@ afterinstall:
+ # and the contents of it exists in /usr/share/zoneinfo, then reinstall
+ # it.
+ #
++.if ${MK_TZSETUP} != "no"
+ 	@if [ -f ${DESTDIR}/var/db/zoneinfo -a -O ${DESTDIR}/var/db/zoneinfo \
+ 	    -a -G ${DESTDIR}/var/db/zoneinfo ]; then \
+ 		zf=$$(cat ${DESTDIR}/var/db/zoneinfo); \
+@@ -107,5 +110,8 @@ afterinstall:
+ 	else \
+ 		echo "Run tzsetup(8) manually to update /etc/localtime."; \
+ 	fi
++.else
++	@echo "Copy a zone file to update /etc/localtime."
++.endif
+ 
+ .include <bsd.prog.mk>
