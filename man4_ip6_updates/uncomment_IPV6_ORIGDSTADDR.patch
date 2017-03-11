@@ -1,0 +1,17 @@
+Index: share/man/man4/ip6.4
+===================================================================
+--- share/man/man4/ip6.4	(revision 315058)
++++ share/man/man4/ip6.4	(working copy)
+@@ -156,9 +156,9 @@ datagrams sent on this socket.
+ .\" .It Dv IPV6_RECVDSTADDR Fa "int *"
+ .\" Get or set the status of whether datagrams are received with
+ .\" destination addresses.
+-.\" .It Dv IPV6_ORIGDSTADDR Fa "int *"
+-.\" Get or set the status of whether datagrams are received with
+-.\" destination addresses and destination ports.
++.It Dv IPV6_ORIGDSTADDR Fa "int *"
++Get or set the status of whether datagrams are received with
++destination addresses and destination ports.
+ .\" .It Dv IPV6_RETOPTS
+ .\" Get or set IPv6 options.
+ .It Dv IPV6_MULTICAST_IF Fa "u_int *"

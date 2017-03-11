@@ -1,0 +1,40 @@
+--- share/man/man4/ip6.4.v1.32	2017-03-11 10:24:20.087261000 +0200
++++ share/man/man4/ip6.4	2017-03-11 10:24:23.991576000 +0200
+@@ -285,7 +285,7 @@ struct ip6_hbh {
+ .Ed
+ .Pp
+ The
+-.Fn inet6_option_space
++.Fn inet6_opt_init
+ routine and family of routines may be used to manipulate this data.
+ .Pp
+ This option requires superuser privileges.
+@@ -307,7 +307,7 @@ struct ip6_dest {
+ .Ed
+ .Pp
+ The
+-.Fn inet6_option_space
++.Fn inet6_opt_init
+ routine and family of routines may be used to manipulate this data.
+ .Pp
+ This option requires superuser privileges.
+@@ -343,7 +343,7 @@ struct ip6_rthdr {
+ .Ed
+ .Pp
+ The
+-.Fn inet6_option_space
++.Fn inet6_rth_space
+ routine and family of routines may be used to manipulate this data.
+ .Pp
+ This option requires superuser privileges.
+@@ -650,8 +650,8 @@ An ancillary data object was improperly 
+ .Xr send 2 ,
+ .Xr setsockopt 2 ,
+ .Xr socket 2 ,
+-.\" .Xr inet6_option_space 3 ,
+-.\" .Xr inet6_rthdr_space 3 ,
++.\" .Xr inet6_opt_init 3 ,
++.\" .Xr inet6_rth_space 3 ,
+ .Xr if_nametoindex 3 ,
+ .Xr bpf 4 ,
+ .Xr icmp6 4 ,

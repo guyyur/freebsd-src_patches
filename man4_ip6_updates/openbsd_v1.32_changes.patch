@@ -1,0 +1,64 @@
+--- share/man/man4/ip6.4	2017-03-11 10:19:58.135225000 +0200
++++ share/man/man4/ip6.4.v1.32	2017-03-11 10:24:20.087261000 +0200
+@@ -144,24 +144,12 @@ extension headers.
+ .Pp
+ The following socket options are supported:
+ .Bl -tag -width Ds
+-.\" .It Dv IPV6_OPTIONS
+ .It Dv IPV6_UNICAST_HOPS Fa "int *"
+ Get or set the default hop limit header field for outgoing unicast
+ datagrams sent on this socket.
+-.\" .It Dv IPV6_RECVOPTS Fa "int *"
+-.\" Get or set the status of whether all header options will be
+-.\" delivered along with the datagram when it is received.
+-.\" .It Dv IPV6_RECVRETOPTS Fa "int *"
+-.\" Get or set the status of whether header options will be delivered
+-.\" for reply.
+-.\" .It Dv IPV6_RECVDSTADDR Fa "int *"
+-.\" Get or set the status of whether datagrams are received with
+-.\" destination addresses.
+ .It Dv IPV6_ORIGDSTADDR Fa "int *"
+ Get or set the status of whether datagrams are received with
+ destination addresses and destination ports.
+-.\" .It Dv IPV6_RETOPTS
+-.\" Get or set IPv6 options.
+ .It Dv IPV6_MULTICAST_IF Fa "u_int *"
+ Get or set the interface from which multicast packets will be sent.
+ For hosts with multiple interfaces, each multicast transmission is sent
+@@ -270,17 +258,17 @@ The value is stored as an
+ in the ancillary data returned.
+ Turning this option on will result in this socket getting cmsg data of
+ type IPV6_HOPLIMIT.
+-.\" .It Dv IPV6_NEXTHOP Fa "int *"
+-.\" Get or set whether the address of the next hop for subsequent
+-.\" packets will be provided as ancillary data along with the payload in
+-.\" subsequent
+-.\" .Xr recvmsg 2
+-.\" calls.
+-.\" The option is stored as a
+-.\" .Vt sockaddr
+-.\" structure in the ancillary data returned.
+-.\" .Pp
+-.\" This option requires superuser privileges.
++.It Dv IPV6_NEXTHOP Fa "int *"
++Get or set whether the address of the next hop for subsequent
++packets will be provided as ancillary data along with the payload in
++subsequent
++.Xr recvmsg 2
++calls.
++The option is stored as a
++.Vt sockaddr
++structure in the ancillary data returned.
++.Pp
++This option requires superuser privileges.
+ .It Dv IPV6_RECVHOPOPTS Fa "int *"
+ Get or set whether the hop-by-hop options from subsequent packets will be
+ provided as ancillary data along with the payload in subsequent
+@@ -428,7 +416,6 @@ level.
+ .Pp
+ The
+ .Dv IPV6_RECVPKTINFO ,
+-.\" .Dv IPV6_RECVNEXTHOP ,
+ .Dv IPV6_RECVHOPLIMIT ,
+ .Dv IPV6_RECVHOPOPTS ,
+ .Dv IPV6_RECVDSTOPTS ,

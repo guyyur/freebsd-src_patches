@@ -1,0 +1,19 @@
+--- share/man/man4/ip6.4.v1.29	2017-03-11 10:19:41.038689000 +0200
++++ share/man/man4/ip6.4	2017-03-11 10:19:58.135225000 +0200
+@@ -686,16 +686,6 @@ An ancillary data object was improperly 
+ .%A R. Gilligan
+ .%A S. Thomson
+ .%A J. Bound
+-.%A W. Stevens
+-.%D March 1999
+-.%R RFC 2553
+-.%T Basic Socket Interface Extensions for IPv6
+-.Re
+-.Pp
+-.Rs
+-.%A R. Gilligan
+-.%A S. Thomson
+-.%A J. Bound
+ .%A J. McCann
+ .%A W. Stevens
+ .%D February 2003
