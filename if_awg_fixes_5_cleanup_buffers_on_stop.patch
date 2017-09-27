@@ -1,0 +1,49 @@
+Index: sys/arm/allwinner/if_awg.c
+===================================================================
+--- sys/arm/allwinner/if_awg.c  (revision 323952MMM)
++++ sys/arm/allwinner/if_awg.c  (working copy)
+@@ -795,6 +795,7 @@ awg_stop(struct awg_softc *sc)
+ {
+ 	if_t ifp;
+ 	uint32_t val;
++	int i;
+ 
+ 	AWG_ASSERT_LOCKED(sc);
+ 
+@@ -829,6 +830,36 @@ awg_stop(struct awg_softc *sc)
+ 
+ 	sc->link = 0;
+ 
++	/* Release any xmit buffers. */
++	for (i = sc->tx.next; sc->tx.queued > 0; i = TX_NEXT(i)) {
++		val = le32toh(sc->tx.desc_ring[i].status);
++		if ((val & TX_DESC_CTL) != 0)
++			break;
++		awg_clean_txbuf(sc, i);
++	}
++	sc->tx.next = i;
++	for (; sc->tx.queued > 0; i = TX_NEXT(i)) {
++		sc->tx.desc_ring[i].status = 0;
++		awg_clean_txbuf(sc, i);
++	}
++	sc->tx.cur = sc->tx.next;
++	bus_dmamap_sync(sc->tx.desc_tag, sc->tx.desc_map,
++	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
++
++	/* Setup RX buffers for reuse */
++	bus_dmamap_sync(sc->rx.desc_tag, sc->rx.desc_map,
++	    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
++
++	for (i = sc->rx.cur; ; i = RX_NEXT(i)) {
++		val = le32toh(sc->rx.desc_ring[i].status);
++		if ((val & RX_DESC_CTL) != 0)
++			break;
++		awg_reuse_rxdesc(sc, i);
++	}
++	sc->rx.cur = i;
++	bus_dmamap_sync(sc->rx.desc_tag, sc->rx.desc_map,
++	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
++
+ 	if_setdrvflagbits(ifp, 0, IFF_DRV_RUNNING | IFF_DRV_OACTIVE);
+ }
+ 
