@@ -2,7 +2,7 @@ Index: sys/arm/allwinner/if_awg.c
 ===================================================================
 --- sys/arm/allwinner/if_awg.c  (revision 323952M)
 +++ sys/arm/allwinner/if_awg.c  (working copy)
-@@ -104,6 +104,8 @@ __FBSDID("$FreeBSD: head/sys/arm/allwinner/if_awg.c 32
+@@ -104,6 +104,8 @@ __FBSDID("$FreeBSD: head/sys/arm/allwinner/if_awg.c 320830 2017-07-09 12:35:19Z
  #define	TX_INTERVAL_DEFAULT	64
  #define	RX_BATCH_DEFAULT	64
  
@@ -116,7 +116,7 @@ Index: sys/arm/allwinner/if_awg.c
  	if ((m->m_pkthdr.csum_flags & CSUM_IP) != 0) {
  		if ((m->m_pkthdr.csum_flags & (CSUM_TCP|CSUM_UDP)) != 0)
  			csum_flags = TX_CHECKSUM_CTL_FULL;
-@@ -442,20 +444,70 @@ awg_setup_txbuf(struct awg_softc *sc, int index, struc
+@@ -442,17 +444,67 @@ awg_setup_txbuf(struct awg_softc *sc, int index, struct mbuf **mp)
  		flags |= (csum_flags << TX_CHECKSUM_CTL_SHIFT);
  	}
  
@@ -170,9 +170,9 @@ Index: sys/arm/allwinner/if_awg.c
 +	sc->tx.buf_map[last].mbuf = m;
 +
 +	return (0);
- }
- 
- static void
++}
++
++static void
 +awg_clean_txbuf(struct awg_softc *sc, int index)
 +{
 +	struct awg_bufmap *bmap;
@@ -187,12 +187,9 @@ Index: sys/arm/allwinner/if_awg.c
 +		m_freem(bmap->mbuf);
 +		bmap->mbuf = NULL;
 +	}
-+}
-+
-+static void
- awg_setup_rxdesc(struct awg_softc *sc, int index, bus_addr_t paddr)
- {
- 	uint32_t status, size;
+ }
+ 
+ static void
 @@ -510,7 +562,7 @@ awg_start_locked(struct awg_softc *sc)
  	struct mbuf *m;
  	uint32_t val;
@@ -240,14 +237,15 @@ Index: sys/arm/allwinner/if_awg.c
  {
 -	struct awg_bufmap *bmap;
  	struct emac_desc *desc;
- 	uint32_t status;
+-	uint32_t status;
++	uint32_t status, size;
  	if_t ifp;
 -	int i;
 +	int i, prog;
  
  	AWG_ASSERT_LOCKED(sc);
  
-@@ -889,28 +937,28 @@ awg_txintr(struct awg_softc *sc)
+@@ -889,28 +937,29 @@ awg_txintr(struct awg_softc *sc)
  	    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
  
  	ifp = sc->ifp;
@@ -268,15 +266,16 @@ Index: sys/arm/allwinner/if_awg.c
 +
 +		prog++;
 +		awg_clean_txbuf(sc, i);
-+		if ((status & (TX_HEADER_ERR | TX_PAYLOAD_ERR)) != 0) {
-+			if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
++		size = le32toh(desc->size);
++		if (size & TX_LAST_DESC) {
++			if ((status & (TX_HEADER_ERR | TX_PAYLOAD_ERR)) != 0)
++				if_inc_counter(ifp, IFCOUNTER_OERRORS, 1);
++			else
++				if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
  		}
 -		awg_setup_txdesc(sc, i, 0, 0, 0);
 -		if_setdrvflagbits(ifp, 0, IFF_DRV_OACTIVE);
 -		if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
-+		else {
-+			if_inc_counter(ifp, IFCOUNTER_OPACKETS, 1);
-+		}
  	}
  
 -	sc->tx.next = i;
@@ -290,7 +289,7 @@ Index: sys/arm/allwinner/if_awg.c
  }
  
  static void
-@@ -928,8 +976,10 @@ awg_intr(void *arg)
+@@ -928,8 +977,10 @@ awg_intr(void *arg)
  	if (val & RX_INT)
  		awg_rxintr(sc);
  
@@ -303,7 +302,7 @@ Index: sys/arm/allwinner/if_awg.c
  		if (!if_sendq_empty(sc->ifp))
  			awg_start_locked(sc);
  	}
-@@ -956,7 +1006,7 @@ awg_poll(if_t ifp, enum poll_cmd cmd, int count)
+@@ -956,7 +1007,7 @@ awg_poll(if_t ifp, enum poll_cmd cmd, int count)
  	}
  
  	rx_npkts = awg_rxintr(sc);
@@ -312,7 +311,7 @@ Index: sys/arm/allwinner/if_awg.c
  	if (!if_sendq_empty(ifp))
  		awg_start_locked(sc);
  
-@@ -1505,7 +1555,7 @@ awg_setup_dma(device_t dev)
+@@ -1505,7 +1556,7 @@ awg_setup_dma(device_t dev)
  		return (error);
  	}
  
@@ -321,7 +320,7 @@ Index: sys/arm/allwinner/if_awg.c
  	for (i = 0; i < TX_DESC_COUNT; i++) {
  		error = bus_dmamap_create(sc->tx.buf_tag, 0,
  		    &sc->tx.buf_map[i].map);
-@@ -1513,7 +1563,6 @@ awg_setup_dma(device_t dev)
+@@ -1513,7 +1564,6 @@ awg_setup_dma(device_t dev)
  			device_printf(dev, "cannot create TX buffer map\n");
  			return (error);
  		}
