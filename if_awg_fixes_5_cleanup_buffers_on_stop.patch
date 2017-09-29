@@ -2,7 +2,7 @@ Index: sys/arm/allwinner/if_awg.c
 ===================================================================
 --- sys/arm/allwinner/if_awg.c  (revision 323952MMM)
 +++ sys/arm/allwinner/if_awg.c  (working copy)
-@@ -795,6 +795,7 @@ awg_stop(struct awg_softc *sc)
+@@ -807,6 +807,7 @@ awg_stop(struct awg_softc *sc)
  {
  	if_t ifp;
  	uint32_t val;
@@ -10,11 +10,15 @@ Index: sys/arm/allwinner/if_awg.c
  
  	AWG_ASSERT_LOCKED(sc);
  
-@@ -829,6 +830,36 @@ awg_stop(struct awg_softc *sc)
+@@ -840,6 +841,39 @@ awg_stop(struct awg_softc *sc)
+ 	WR4(sc, EMAC_RX_CTL_1, val & ~RX_DMA_EN);
  
  	sc->link = 0;
- 
-+	/* Release any xmit buffers. */
++
++	/* Finish handling transmitted buffers */
++	awg_txeof(sc);
++
++	/* Release any untransmitted buffers. */
 +	for (i = sc->tx.next; sc->tx.queued > 0; i = TX_NEXT(i)) {
 +		val = le32toh(sc->tx.desc_ring[i].status);
 +		if ((val & TX_DESC_CTL) != 0)
@@ -43,7 +47,6 @@ Index: sys/arm/allwinner/if_awg.c
 +	sc->rx.cur = i;
 +	bus_dmamap_sync(sc->rx.desc_tag, sc->rx.desc_map,
 +	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
-+
+ 
  	if_setdrvflagbits(ifp, 0, IFF_DRV_RUNNING | IFF_DRV_OACTIVE);
  }
- 
