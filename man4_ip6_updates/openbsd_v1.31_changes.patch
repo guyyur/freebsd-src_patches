@@ -1,6 +1,6 @@
 --- share/man/man4/ip6.4.v1.29	2017-03-11 10:19:41.038689000 +0200
 +++ share/man/man4/ip6.4	2017-03-11 10:19:58.135225000 +0200
-@@ -686,16 +686,6 @@ An ancillary data object was improperly 
+@@ -686,16 +686,6 @@ An ancillary data object was improperly formed.
  .%A R. Gilligan
  .%A S. Thomson
  .%A J. Bound

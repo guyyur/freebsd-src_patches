@@ -27,14 +27,3 @@
  routine and family of routines may be used to manipulate this data.
  .Pp
  This option requires superuser privileges.
-@@ -650,8 +650,8 @@ An ancillary data object was improperly 
- .Xr send 2 ,
- .Xr setsockopt 2 ,
- .Xr socket 2 ,
--.\" .Xr inet6_option_space 3 ,
--.\" .Xr inet6_rthdr_space 3 ,
-+.\" .Xr inet6_opt_init 3 ,
-+.\" .Xr inet6_rth_space 3 ,
- .Xr if_nametoindex 3 ,
- .Xr bpf 4 ,
- .Xr icmp6 4 ,

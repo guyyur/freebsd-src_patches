@@ -1,6 +1,6 @@
 --- share/man/man4/ip6.4.v1.26	2017-03-11 10:19:20.670658000 +0200
 +++ share/man/man4/ip6.4	2017-03-11 10:19:41.038689000 +0200
-@@ -673,42 +673,46 @@ An ancillary data object was improperly 
+@@ -673,41 +673,46 @@ An ancillary data object was improperly formed.
  .Xr netintro 4 ,
  .Xr tcp 4 ,
  .Xr udp 4
@@ -28,15 +28,14 @@
  .Re
 +.Pp
  .Rs
-+.%A R. Gilligan
-+.%A S. Thomson
-+.%A J. Bound
-+.%A J. McCann
+ .%A R. Gilligan
+ .%A S. Thomson
+ .%A J. Bound
+ .%A J. McCann
  .%A W. Stevens
--.%A B. Fenner
--.%A A. Rudoff
--.%T UNIX Network Programming, third edition
-+.%D February 2003
+-.%T Basic Socket Interface Extensions for IPv6
+-.%R RFC 3493
+ .%D February 2003
 +.%R RFC 3493
 +.%T Basic Socket Interface Extensions for IPv6
  .Re
@@ -52,11 +51,25 @@
 +.%R RFC 3542
 +.%T Advanced Sockets Application Program Interface (API) for IPv6
  .Re
++.Pp
+ .Rs
+ .%A S. Deering
+ .%A R. Hinden
+@@ -715,17 +720,7 @@ An ancillary data object was improperly formed.
+ .%R RFC 8200
+ .%D July 2017
+ .Re
+-.Rs
+-.%A W. Stevens
+-.%A B. Fenner
+-.%A A. Rudoff
+-.%T UNIX Network Programming, 3rd Edition
+-.%I Addison-Wesley Professional
+-.%D November 2003
+-.Re
 -.Sh STANDARDS
--Most of the socket options are defined in RFC 2553 or RFC 3542.
--The
--.Dv IPV6_V6ONLY
--socket option is defined in RFC 3493 Section 5.3.
+-Most of the socket options are defined in RFC 2292 / 3542 or
+-RFC 2553 / 3493.
 +.Pp
  The
  .Dv IPV6_PORTRANGE

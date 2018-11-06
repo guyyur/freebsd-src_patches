@@ -59,7 +59,7 @@
  .It Dv IPV6_TCLASS Fa "int *"
  Get or set the value of the traffic class field used for outgoing datagrams
  on this socket.
-@@ -328,7 +337,7 @@ provided as ancillary data along with th
+@@ -328,7 +337,7 @@ provided as ancillary data along with the payload in s
  calls.
  The header field is stored as a single value of type
  .Vt int .
@@ -103,7 +103,7 @@
  These options may also be used directly as ancillary
  .Va cmsg_type
  values in
-@@ -458,7 +469,7 @@ A good example is the outgoing interface
+@@ -458,7 +469,7 @@ A good example is the outgoing interface for multicast
  can be set by the
  .Dv IPV6_MULTICAST_IF
  socket option, through the
@@ -121,36 +121,17 @@
      sizeof(optval)) == -1)
  	err(1, "setsockopt");
  
-@@ -663,13 +674,6 @@ An ancillary data object was improperly 
+@@ -662,13 +673,6 @@ An ancillary data object was improperly formed.
+ .Xr netintro 4 ,
  .Xr tcp 4 ,
  .Xr udp 4
- .Rs
+-.Rs
 -.%A W. Stevens
 -.%A M. Thomas
 -.%T Advanced Sockets API for IPv6
 -.%R RFC 2292
 -.%D February 1998
 -.Re
--.Rs
+ .Rs
  .%A S. Deering
  .%A R. Hinden
- .%T Internet Protocol, Version 6 (IPv6) Specification
-@@ -691,8 +695,17 @@ An ancillary data object was improperly 
- .%A A. Rudoff
- .%T UNIX Network Programming, third edition
- .Re
-+.Rs
-+.%A W. Stevens
-+.%A M. Thomas
-+.%A E. Nordmark
-+.%A T. Jinmei
-+.%T Advanced Sockets Application Program Interface (API) for IPv6
-+.%R RFC 3542
-+.%D May 2003
-+.Re
- .Sh STANDARDS
--Most of the socket options are defined in RFC 2292 or RFC 2553.
-+Most of the socket options are defined in RFC 2553 or RFC 3542.
- The
- .Dv IPV6_V6ONLY
- socket option is defined in RFC 3493 Section 5.3.
