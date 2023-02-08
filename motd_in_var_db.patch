@@ -1,0 +1,131 @@
+commit 5de40b24c7ebd39b0da18eaa9cbd9b6170b29016
+Author: Guy Yur <guyyur@gmail.com>
+Date:   Tue Jan 31 16:20:45 2023 +0200
+
+    Fix motd not displaying with update_motd="NO"
+    
+    There is no way to have a motd file without a FreeBSD version string appended.
+    To avoid appending the string, motd rc script should be disabled using
+    update_motd="NO" and an immutable motd file created.
+    
+    If the file is created in /var/run it will not survive reboot
+    because the cleanvar rc script will delete it.
+    It is also possible to mount /var/run as tmpfs which also won't survive reboot.
+    
+    Move it from /var/run/motd to /var/db/motd so it will persist after reboot.
+    
+    PR: bin/250081
+
+diff --git a/libexec/rc/rc.d/motd b/libexec/rc/rc.d/motd
+index d9dd60a0f59..aea528b0c33 100755
+--- a/libexec/rc/rc.d/motd
++++ b/libexec/rc/rc.d/motd
+@@ -10,19 +10,19 @@
+ . /etc/rc.subr
+ 
+ name="motd"
+-desc="Update /var/run/motd"
++desc="Update /var/db/motd"
+ rcvar="update_motd"
+ start_cmd="motd_start"
+ stop_cmd=":"
+ 
+ COMPAT_MOTD="/etc/motd"
+-TARGET="/var/run/motd"
++TARGET="/var/db/motd"
+ TEMPLATE="/etc/motd.template"
+ PERMS="644"
+ 
+ motd_start()
+ {
+-	#	Update kernel info in /var/run/motd
++	#	Update kernel info in /var/db/motd
+ 	#	Must be done *before* interactive logins are possible
+ 	#	to prevent possible race conditions.
+ 	#
+diff --git a/share/man/man5/motd.5 b/share/man/man5/motd.5
+index f8d8ee97c66..5e60d93649b 100644
+--- a/share/man/man5/motd.5
++++ b/share/man/man5/motd.5
+@@ -11,7 +11,7 @@
+ .Nd file containing message(s) of the day
+ .Sh DESCRIPTION
+ The file
+-.Pa /var/run/motd
++.Pa /var/db/motd
+ is normally displayed by
+ .Xr login 1
+ after a user has logged in but before the shell is run.
+@@ -20,9 +20,9 @@ During system startup, a line containing the kernel version string is
+ prepended to
+ .Pa /etc/motd.template
+ and the contents are written to
+-.Pa /var/run/motd .
++.Pa /var/db/motd .
+ .Pp
+-.Pa /var/run/motd
++.Pa /var/db/motd
+ can be updated without a system reboot by manually restarting the
+ motd service after updating
+ .Pa /etc/motd.template :
+@@ -39,11 +39,11 @@ in their home directories or through
+ .Bl -tag -width $HOME/.hushlogin -compact
+ .It Pa /etc/motd.template
+ The template file that system administrators can edit.
+-.It Pa /var/run/motd
++.It Pa /var/db/motd
+ The message of the day.
+ .It Pa $HOME/.hushlogin
+ Suppresses output of
+-.Pa /var/run/motd .
++.Pa /var/db/motd .
+ .El
+ .Sh EXAMPLES
+ .Bd -literal
+diff --git a/usr.bin/login/login.1 b/usr.bin/login/login.1
+index ddb3b30f1b5..1a1aeade0f3 100644
+--- a/usr.bin/login/login.1
++++ b/usr.bin/login/login.1
+@@ -131,7 +131,7 @@ result in an error exit from
+ changes device protections
+ .It Pa /etc/login.conf
+ login class capabilities database
+-.It Pa /var/run/motd
++.It Pa /var/db/motd
+ message-of-the-day
+ .It Pa /var/mail/user
+ system mailboxes
+diff --git a/usr.bin/login/login.conf b/usr.bin/login/login.conf
+index 25f0f267ff6..ebe019304d7 100644
+--- a/usr.bin/login/login.conf
++++ b/usr.bin/login/login.conf
+@@ -25,7 +25,7 @@
+ default:\
+ 	:passwd_format=sha512:\
+ 	:copyright=/etc/COPYRIGHT:\
+-	:welcome=/var/run/motd:\
++	:welcome=/var/db/motd:\
+ 	:setenv=BLOCKSIZE=K:\
+ 	:mail=/var/mail/$:\
+ 	:path=/sbin /bin /usr/sbin /usr/bin /usr/local/sbin /usr/local/bin ~/bin:\
+@@ -129,7 +129,7 @@ russian|Russian Users Accounts:\
+ ##
+ #standard:\
+ #	:copyright=/etc/COPYRIGHT:\
+-#	:welcome=/var/run/motd:\
++#	:welcome=/var/db/motd:\
+ #	:setenv=BLOCKSIZE=K:\
+ #	:mail=/var/mail/$:\
+ #	:path=~/bin /bin /usr/bin /usr/local/bin:\
+diff --git a/usr.bin/login/pathnames.h b/usr.bin/login/pathnames.h
+index 5dca6f2cbb4..38d20d8c9af 100644
+--- a/usr.bin/login/pathnames.h
++++ b/usr.bin/login/pathnames.h
+@@ -35,6 +35,6 @@
+ #include <paths.h>
+ 
+ #define	_PATH_HUSHLOGIN		".hushlogin"
+-#define	_PATH_MOTDFILE		"/var/run/motd"
++#define	_PATH_MOTDFILE		"/var/db/motd"
+ #define _PATH_FBTAB		"/etc/fbtab"
+ #define _PATH_LOGINDEVPERM	"/etc/logindevperm"
